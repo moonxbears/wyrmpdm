@@ -116,7 +116,7 @@ public static class ExtensionMethods
     
     extension(ArrayList source)
     {
-		public IEnumerable this[Range range]
+		/*public IEnumerable this[Range range]
 		{
 			get
 			{
@@ -125,7 +125,7 @@ public static class ExtensionMethods
 					yield return source[ i ];
 				}
 			}
-		}
+		}*/
 		public bool Any<T>(Func<T, bool> predicate)
 	    {
 		    foreach (T obj in source.OfType<T>())
