@@ -1,33 +1,13 @@
-﻿<Project Sdk="Uno.Sdk">
+<Project Sdk="Uno.Sdk">
   <PropertyGroup>
-    <UnoResizetizerDisabled>true</UnoResizetizerDisabled>
     <UnoDisableResizetizer>true</UnoDisableResizetizer>
-
-  </PropertyGroup>
-  <PropertyGroup>
-    <UnoResizetizerDisabled>true</UnoResizetizerDisabled>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-    <UnoResizetizerDisabled>true</UnoResizetizerDisabled>
     <UnoResizetizerEnabled>false</UnoResizetizerEnabled>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-
-  </PropertyGroup>
-  <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
-  </ItemGroup>
-  <PropertyGroup>
-    <UnoResizetizerDisabled>true</UnoResizetizerDisabled>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-    <UnoResizetizerDisabled>true</UnoResizetizerDisabled>
-    <UnoResizetizerEnabled>false</UnoResizetizerEnabled>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-    <NoWarn>$(NoWarn);NU1605;NU1903;NU1202</NoWarn>
+    <NoWarn>$(NoWarn);NU1605;NU1903;NU1202;CA1416</NoWarn>
     <PackageConflictResolution>false</PackageConflictResolution>
-    <OutputType Condition="$(TargetFramework.Contains('windows'))">WinExe</OutputType><OutputType Condition="!$(TargetFramework.Contains('windows'))">Exe</OutputType>
-	<TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
-	<TargetPlatformMinVersion Condition="$(TargetFramework.Contains('windows'))">10.0.17763.0</TargetPlatformMinVersion>
+    <OutputType Condition="$(TargetFramework.Contains('windows'))">WinExe</OutputType>
+    <OutputType Condition="!$(TargetFramework.Contains('windows'))">Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion Condition="$(TargetFramework.Contains('windows'))">10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>HackPDM</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platform>x64</Platform>
@@ -35,33 +15,27 @@
 
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
 
-
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
-	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableWindowsTargeting Condition="$(TargetFramework.Contains('windows'))">true</EnableWindowsTargeting>
     <WindowsTargetPlatformVersion Condition="$(TargetFramework.Contains('windows'))">10.0.26100.0</WindowsTargetPlatformVersion>
     <WindowsAppSDKSelfContained Condition="$(TargetFramework.Contains('windows'))">true</WindowsAppSDKSelfContained>
-
   </PropertyGroup>
+
   <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
     <None Remove="UI\Forms\Hack\home.xaml" />
     <None Remove="UI\Forms\Helper\DynamicJsonForm.xaml" />
     <None Remove="UI\Forms\Helper\MessageBoxWindow.xaml" />
     <None Remove="UI\Forms\Helper\PipWindow.xaml" />
     <None Remove="UI\Forms\Settings\NotLoggedIn.xaml" />
   </ItemGroup>
-    <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
-		<ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
-    </ItemGroup>
 
   <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
+    <ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
@@ -73,22 +47,28 @@
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <ProjectCapability Include="Msix" />
   </ItemGroup>
+
   <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
-
-
-
-
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.7.15" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
-
-
     <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.1" />
     <PackageReference Include="System.Reactive" Version="7.0.0-preview.1" />
   </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+    <PackageReference Include="CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.2" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Extensions" Version="8.2.251219" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.2" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">
+    <PackageReference Include="Uno.CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.206" />
+  </ItemGroup>
+
   <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
     <Compile Update="Properties\Resources.Designer.cs.backup">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -100,19 +80,21 @@
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
   </ItemGroup>
-  <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
 
-  </ItemGroup>
   <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
+    <Content Include="Assets\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Update="Properties\Resources.resx.backup">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
+
   <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
     <None Update="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -136,8 +118,8 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
+
   <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
     <Page Update="Forms\Hack\HackFileManager.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -190,8 +172,8 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
+
   <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
     <Reference Include="SolidWorks.Interop.sldworks">
       <HintPath>..\HackPDM.Infrastructure\lib\SolidWorks.Interop.sldworks.dll</HintPath>
     </Reference>
@@ -217,20 +199,9 @@
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
-  <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
-  </ItemGroup>
 
   <!-- Publish Properties -->
   <PropertyGroup>
-    <UnoResizetizerDisabled>true</UnoResizetizerDisabled>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-    <UnoResizetizerDisabled>true</UnoResizetizerDisabled>
-    <UnoResizetizerEnabled>false</UnoResizetizerEnabled>
-    <UnoDisableResizetizer>true</UnoDisableResizetizer>
-    <NoWarn>$(NoWarn);NU1605;NU1903;NU1202</NoWarn>
-    <PackageConflictResolution>false</PackageConflictResolution>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
@@ -238,8 +209,5 @@
     <SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('windows'))">10.0.17763.0</SupportedOSPlatformVersion>
     <ApplicationIcon>Assets\hackpdm-icon.ico</ApplicationIcon>
   </PropertyGroup>
-  <ItemGroup>
-    <Content Remove="Assets\**\*.*" />
-  </ItemGroup>
   <ProjectExtensions><VisualStudio><UserProperties properties_4launchsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
 </Project>
