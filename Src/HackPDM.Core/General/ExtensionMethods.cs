@@ -116,7 +116,6 @@ public static class ExtensionMethods
     
     extension(ArrayList source)
     {
-
 		public bool Any<T>(Func<T, bool> predicate)
 	    {
 		    foreach (T obj in source.OfType<T>())
