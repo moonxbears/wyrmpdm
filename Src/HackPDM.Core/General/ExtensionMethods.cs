@@ -116,14 +116,11 @@ public static class ExtensionMethods
     
     extension(ArrayList source)
     {
-		public IEnumerable this[Range range]
+		public IEnumerable GetRange(Range range)
 		{
-			get
+			for( int i = range.Start.Value; i < range.End.Value; i++ )
 			{
-				for( int i = range.Start.Value; i < range.End.Value; i++ )
-				{
-					yield return source[ i ];
-				}
+				yield return source[ i ];
 			}
 		}
 		public bool Any<T>(Func<T, bool> predicate)
