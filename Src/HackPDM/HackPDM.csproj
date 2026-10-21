@@ -1,5 +1,6 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
+    <UnoSingleProject>true</UnoSingleProject>
     <UnoDisableResizetizer>true</UnoDisableResizetizer>
     <UnoResizetizerEnabled>false</UnoResizetizerEnabled>
     <DisableDefaultUnoResizetizerItems>true</DisableDefaultUnoResizetizerItems>
@@ -7,7 +8,7 @@
     <PackageConflictResolution>false</PackageConflictResolution>
     <OutputType Condition="$(TargetFramework.Contains('windows'))">WinExe</OutputType>
     <OutputType Condition="!$(TargetFramework.Contains('windows'))">Exe</OutputType>
-    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetFrameworks>net10.0-windows10.0.26100.0;net10.0-desktop</TargetFrameworks>
     <TargetPlatformMinVersion Condition="$(TargetFramework.Contains('windows'))">10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>HackPDM</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -22,9 +23,12 @@
     <EnableWindowsTargeting Condition="$(TargetFramework.Contains('windows'))">true</EnableWindowsTargeting>
     <WindowsTargetPlatformVersion Condition="$(TargetFramework.Contains('windows'))">10.0.26100.0</WindowsTargetPlatformVersion>
     <WindowsAppSDKSelfContained Condition="$(TargetFramework.Contains('windows'))">true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier Condition="('$(Platform)' == 'AnyCPU' or '$(Platform)' == 'Any CPU') and '$(RuntimeIdentifier)' == '' and $(TargetFramework.Contains('windows'))">win-x64</RuntimeIdentifier>
+    <Win2DWarnNoPlatform Condition="'$(Platform)' == 'AnyCPU' or '$(Platform)' == 'Any CPU'">true</Win2DWarnNoPlatform>
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Microsoft.UI.Xaml.Controls" />
     <None Remove="UI\Forms\Hack\home.xaml" />
     <None Remove="UI\Forms\Helper\DynamicJsonForm.xaml" />
     <None Remove="UI\Forms\Helper\MessageBoxWindow.xaml" />
