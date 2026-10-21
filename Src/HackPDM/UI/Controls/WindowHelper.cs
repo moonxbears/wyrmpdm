@@ -173,7 +173,8 @@ public static partial class WindowHelper
         _animationCts.Cancel();
         _animationCts = new CancellationTokenSource();
 		//AnimateWindowSize(window.AppWindow, new Windows.Graphics.SizeInt32(windowConfig.PositionAndSize.z, windowConfig.PositionAndSize.w), 250, _animationCts.Token);
-        window.AppWindow?.MoveAndResize(windowConfig.PositionAndSize);
+        var pos = windowConfig.PositionAndSize;
+        window.AppWindow?.MoveAndResize(new Windows.Graphics.RectInt32(pos.x, pos.y, pos.z, pos.w));
 		var titleBar = window.AppWindow?.TitleBar;
 		if (titleBar == null) return;
 

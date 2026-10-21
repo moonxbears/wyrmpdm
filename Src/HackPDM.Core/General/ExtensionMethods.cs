@@ -203,7 +203,7 @@ public static class ExtensionMethods
 			return true;
 		}
 
-		public FileInfo CopyFile(string toPath)
+		public FileInfo? CopyFile(string toPath)
 		{
 			try
 			{
@@ -211,11 +211,7 @@ public static class ExtensionMethods
 
 				string toFilePath = Path.Combine(toPath, file.Name);
 
-				if (file.Exists)
-				{
-					return file.CopyTo(toFilePath, true);
-				}
-				else return null;
+				return  file.Exists  ?  file.CopyTo(toFilePath, true)  :     null;
 			}
 			catch { }
 			return null;

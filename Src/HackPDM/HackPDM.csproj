@@ -2,6 +2,7 @@
   <PropertyGroup>
     <UnoDisableResizetizer>true</UnoDisableResizetizer>
     <UnoResizetizerEnabled>false</UnoResizetizerEnabled>
+    <DisableDefaultUnoResizetizerItems>true</DisableDefaultUnoResizetizerItems>
     <NoWarn>$(NoWarn);NU1605;NU1903;NU1202;CA1416</NoWarn>
     <PackageConflictResolution>false</PackageConflictResolution>
     <OutputType Condition="$(TargetFramework.Contains('windows'))">WinExe</OutputType>
