@@ -3,7 +3,6 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 
-using HackPDM.Infrastructure.Operations;
 
 using Xunit;
 

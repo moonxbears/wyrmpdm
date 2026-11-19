@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Odoo.Models;
 
 using Xunit;
 
