@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -35,13 +36,15 @@ public partial class ThemeColorItem( ThemeColorKey key, bool isGroupStart ) : Ob
 }
 
 /// <summary>
-/// Theme editor: pick light/dark/system, change the shared theme colors (applied live), and save
-/// them to AppConfig.json, which is loaded automatically at startup.
+/// Theme editor: pick palette, style, custom themes, and per-brush colors (applied live), save
+/// to AppConfig.json, soft-reload or restart to finish structural changes, or restore factory defaults.
 /// </summary>
-public partial class ThemeEditorViewModel : ObservableObject
+public partial class ThemeEditorViewModel : ObservableObject, IDisposable
 {
 	private readonly IThemeService _theme;
 	private readonly LoginSession? _session;
+	private bool _syncingFromService;
+	private bool _disposed;
 
 	/// <summary>Builds the color list from <see cref="ThemeColorCatalog.All"/> and reads the current colors and mode.</summary>
 	/// <param name="theme">Applies, edits and saves the theme.</param>
@@ -56,11 +59,9 @@ public partial class ThemeEditorViewModel : ObservableObject
 			Colors.Add( new( key, key.Group != previousGroup ) );
 			previousGroup = key.Group;
 		}
-		SelectedPaletteIndex = PaletteIndex( _theme.Palette );
-		SelectedFormIndex = FormIndex( _theme.Form );
-		ShowTreeBranchLines = _theme.ShowTreeBranchLines;
-		Refresh();
+		SyncFromService();
 		SelectedColor = Colors.FirstOrDefault();
+		_theme.ThemeChanged += OnThemeServiceChanged;
 	}
 
 	/// <summary>The color presets, in menu order.</summary>
@@ -73,6 +74,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 	private static int FormIndex( FormName name ) => ThemePresets.Forms.ToList().FindIndex( f => f.Name == name );
 
 	public ObservableCollection<ThemeColorItem> Colors { get; } = [];
+	public ObservableCollection<string> CustomThemeNames { get; } = [];
 
 	public string SavePath => _theme.SavePath;
 
@@ -85,11 +87,21 @@ public partial class ThemeEditorViewModel : ObservableObject
 
 	[ObservableProperty] public partial bool ShowTreeBranchLines { get; set; } = true;
 
+	[ObservableProperty] public partial string? SelectedCustomTheme { get; set; }
+
+	[ObservableProperty] public partial string NewCustomThemeName { get; set; } = "";
+
+	[ObservableProperty] public partial bool HasCustomThemes { get; set; }
+
+	[ObservableProperty] public partial string OverridesSummary { get; set; } = "";
+
 	/// <summary>What the selected style looks like.</summary>
 	[ObservableProperty] public partial string FormDescription { get; set; } = "";
 
-	/// <summary>A restart is needed to finish a palette or style switch.</summary>
+	/// <summary>A soft reload or process restart is needed to finish a palette or style switch.</summary>
 	[ObservableProperty] public partial bool ShowRestartNotice { get; set; }
+
+	[ObservableProperty] public partial bool CanSoftReloadOnly { get; set; }
 
 	[ObservableProperty]
 	[NotifyCanExecuteChangedFor( nameof( ResetSelectedCommand ) )]
@@ -115,7 +127,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 
 	partial void OnSelectedPaletteIndexChanged( int value )
 	{
-		if( value < 0 || value >= ThemePresets.Palettes.Count || ThemePresets.Palettes[ value ].Name == _theme.Palette )
+		if( _syncingFromService || value < 0 || value >= ThemePresets.Palettes.Count || ThemePresets.Palettes[ value ].Name == _theme.Palette )
 			return;
 		_theme.SetPalette( ThemePresets.Palettes[ value ].Name );
 		HasUnsavedChanges = true;
@@ -128,7 +140,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 		if( value < 0 || value >= ThemePresets.Forms.Count )
 			return;
 		FormDescription = ThemePresets.Forms[ value ].Description;
-		if( ThemePresets.Forms[ value ].Name == _theme.Form )
+		if( _syncingFromService || ThemePresets.Forms[ value ].Name == _theme.Form )
 			return;
 		_theme.SetForm( ThemePresets.Forms[ value ].Name );
 		HasUnsavedChanges = true;
@@ -137,7 +149,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 
 	partial void OnShowTreeBranchLinesChanged( bool value )
 	{
-		if( value == _theme.ShowTreeBranchLines )
+		if( _syncingFromService || value == _theme.ShowTreeBranchLines )
 			return;
 		_theme.SetShowTreeBranchLines( value );
 		HasUnsavedChanges = true;
@@ -146,8 +158,6 @@ public partial class ThemeEditorViewModel : ObservableObject
 	partial void OnSelectedColorChanged( ThemeColorItem? value ) => PublishSelected();
 
 	/// <summary>The color picker (or hex box) set a new value for the selected color.</summary>
-	/// <param name="color">The new color; applied live but not saved.</param>
-	/// <remarks>Ignored while colors can't be edited (<see cref="IsEditable"/> false), with no selection, or when the color is unchanged.</remarks>
 	public void SetSelectedColor( ArgbColor color )
 	{
 		if( !IsEditable || SelectedColor is not { } item || item.Hex == color.ToString() )
@@ -192,6 +202,125 @@ public partial class ThemeEditorViewModel : ObservableObject
 		StatusText = $"All {EditingThemeText.ToLowerInvariant()} colors restored to the defaults (not saved yet).";
 	}
 
+	/// <summary>
+	/// Restores EVERY theme setting (palette, form/density, branch lines, all brush colors,
+	/// independent style/font/corner overrides, and graph overrides) back to HackPDM factory defaults
+	/// and saves to AppConfig.json.
+	/// </summary>
+	[RelayCommand]
+	private void RestoreFactoryDefaults()
+	{
+		try
+		{
+			_theme.ResetToFactoryDefaults( clearCustomThemes: false );
+			_theme.Save();
+			HasUnsavedChanges = false;
+			SyncFromService();
+			PublishSelected();
+			StatusText = _theme.NeedsRestart
+				? "Factory default theme restored and saved. Click Restart HackPDM to finish switching back to Dark mode."
+				: _theme.StyleNeedsRestart
+					? "Factory default theme restored and saved. Click Soft Reload UI to refresh control corners & density."
+					: "All theme, style, and graph settings restored to HackPDM factory defaults and saved.";
+			_session?.LogInfo( ProfileStatusCategory.Settings, "Restored HackPDM theme settings to factory defaults." );
+		}
+		catch( Exception e )
+		{
+			StatusText = $"Reset failed: {e.Message}";
+		}
+	}
+
+	[RelayCommand]
+	private void SaveCustomTheme()
+	{
+		string name = NewCustomThemeName?.Trim() ?? "";
+		if( string.IsNullOrWhiteSpace( name ) )
+		{
+			StatusText = "Enter a name for the custom theme first.";
+			return;
+		}
+		try
+		{
+			SavedThemePreset saved = _theme.SaveCustomTheme( name );
+			_theme.Save();
+			HasUnsavedChanges = false;
+			NewCustomThemeName = "";
+			SyncFromService();
+			SelectedCustomTheme = saved.Name;
+			StatusText = $"Saved custom theme '{saved.Name}' to AppConfig.json.";
+		}
+		catch( Exception e )
+		{
+			StatusText = $"Could not save custom theme: {e.Message}";
+		}
+	}
+
+	[RelayCommand]
+	private void LoadCustomTheme()
+	{
+		if( string.IsNullOrWhiteSpace( SelectedCustomTheme ) )
+			return;
+		try
+		{
+			SavedThemePreset loaded = _theme.LoadCustomTheme( SelectedCustomTheme );
+			HasUnsavedChanges = true;
+			SyncFromService();
+			PublishSelected();
+			StatusText = $"Loaded custom theme '{loaded.Name}' (click Save theme to keep).";
+		}
+		catch( Exception e )
+		{
+			StatusText = $"Could not load custom theme: {e.Message}";
+		}
+	}
+
+	[RelayCommand]
+	private void DeleteCustomTheme()
+	{
+		if( string.IsNullOrWhiteSpace( SelectedCustomTheme ) )
+			return;
+		string target = SelectedCustomTheme;
+		if( _theme.DeleteCustomTheme( target ) )
+		{
+			_theme.Save();
+			SyncFromService();
+			StatusText = $"Deleted custom theme '{target}'.";
+		}
+	}
+
+	/// <summary>Saves AppConfig.json and performs an in-process soft UI rebuild without closing HackPDM or disconnecting MCP.</summary>
+	[RelayCommand]
+	private async Task SoftReloadUiAsync()
+	{
+		try
+		{
+			_theme.Save();
+			HasUnsavedChanges = false;
+			await HackApp.SoftRestartUiAsync( saveConfig: true, preserveNavigation: true );
+		}
+		catch( Exception e )
+		{
+			StatusText = $"Soft reload failed: {e.Message}";
+		}
+	}
+
+	/// <summary>Saves AppConfig.json and performs a clean automatic process restart (preserving MCP connection & active page).</summary>
+	[RelayCommand]
+	private void RestartApp()
+	{
+		try
+		{
+			_theme.Save();
+			HasUnsavedChanges = false;
+			StatusText = "Saving configuration and restarting HackPDM...";
+			HackApp.ScheduleFullRestart( saveConfig: true, preserveNavigation: true, preserveConnection: true );
+		}
+		catch( Exception e )
+		{
+			StatusText = $"Restart failed: {e.Message}";
+		}
+	}
+
 	/// <summary>Saves the theme to AppConfig.json; a failure is shown in the status text.</summary>
 	[RelayCommand( CanExecute = nameof( HasUnsavedChanges ) )]
 	private void Save()
@@ -202,12 +331,12 @@ public partial class ThemeEditorViewModel : ObservableObject
 			HasUnsavedChanges = false;
 			string paletteTitle = ThemePresets.Palette( _theme.Palette ).Title;
 			string formTitle = ThemePresets.Form( _theme.Form ).Title;
-			StatusText = _theme.NeedsRestart || _theme.StyleNeedsRestart
-				? $"Saved {DateTime.Now:t}. Restart HackPDM to finish switching to {paletteTitle} / {formTitle}."
-				: $"Saved {DateTime.Now:t}. Loaded automatically at startup.";
-			_session?.LogInfo( ProfileStatusCategory.Settings, $"Saved theme settings ({paletteTitle} / {formTitle}, branch lines: {(ShowTreeBranchLines ? "shown" : "hidden")})." );
-			if( _theme.NeedsRestart || _theme.StyleNeedsRestart )
-				_session?.LogWarning( ProfileStatusCategory.Settings, $"Restart HackPDM to finish applying {paletteTitle} / {formTitle} theme changes." );
+			StatusText = _theme.NeedsRestart
+				? $"Saved {DateTime.Now:t}. Click Restart HackPDM to finish switching to {paletteTitle} / {formTitle}."
+				: _theme.StyleNeedsRestart
+					? $"Saved {DateTime.Now:t}. Click Soft Reload UI to apply {formTitle} corners & density live."
+					: $"Saved {DateTime.Now:t}. Loaded automatically at startup.";
+			_session?.LogInfo( ProfileStatusCategory.Settings, $"Saved theme settings ({paletteTitle} / {formTitle}, branch lines: {( ShowTreeBranchLines ? "shown" : "hidden" )})." );
 		}
 		catch( Exception e )
 		{
@@ -222,13 +351,48 @@ public partial class ThemeEditorViewModel : ObservableObject
 	{
 		_theme.Revert();
 		HasUnsavedChanges = false;
-		SelectedPaletteIndex = PaletteIndex( _theme.Palette );
-		SelectedFormIndex = FormIndex( _theme.Form );
-		ShowTreeBranchLines = _theme.ShowTreeBranchLines;
-		Refresh();
+		SyncFromService();
 		PublishSelected();
 		StatusText = "Unsaved changes discarded.";
 		_session?.LogInfo( ProfileStatusCategory.Settings, "Reverted unsaved theme settings changes." );
+	}
+
+	private void OnThemeServiceChanged()
+	{
+		UiDispatcher.Post( () =>
+		{
+			if( _disposed )
+				return;
+			SyncFromService();
+			PublishSelected();
+		} );
+	}
+
+	private void SyncFromService()
+	{
+		_syncingFromService = true;
+		try
+		{
+			SelectedPaletteIndex = PaletteIndex( _theme.Palette );
+			SelectedFormIndex = FormIndex( _theme.Form );
+			FormDescription = ThemePresets.Form( _theme.Form ).Description;
+			ShowTreeBranchLines = _theme.ShowTreeBranchLines;
+
+			string? keepCustom = SelectedCustomTheme ?? _theme.Settings.ActiveCustomTheme;
+			IReadOnlyList<SavedThemePreset> customList = _theme.ListCustomThemes();
+			CustomThemeNames.Clear();
+			foreach( SavedThemePreset t in customList )
+				CustomThemeNames.Add( t.Name );
+			HasCustomThemes = CustomThemeNames.Count > 0;
+			SelectedCustomTheme = CustomThemeNames.FirstOrDefault( n => string.Equals( n, keepCustom, StringComparison.OrdinalIgnoreCase ) )
+				?? CustomThemeNames.FirstOrDefault();
+
+			Refresh();
+		}
+		finally
+		{
+			_syncingFromService = false;
+		}
 	}
 
 	private void Refresh( ThemeColorItem? only = null )
@@ -241,13 +405,28 @@ public partial class ThemeEditorViewModel : ObservableObject
 		}
 		EditingThemeText = ThemePresets.Palette( _theme.Palette ).Title;
 		IsEditable = !_theme.NeedsRestart;
+
+		List<string> activeParts = [];
+		int darkCount = _theme.Settings.Dark.Count;
+		int lightCount = _theme.Settings.Light.Count;
+		if( darkCount > 0 || lightCount > 0 )
+			activeParts.Add( $"{darkCount} dark / {lightCount} light brush override(s)" );
+		if( !_theme.Settings.Style.IsEmpty )
+			activeParts.Add( "custom style/typography overrides" );
+		if( !_theme.Settings.Graph.IsEmpty )
+			activeParts.Add( "custom graph theme overrides" );
+		OverridesSummary = activeParts.Count == 0
+			? "Using preset defaults (no independent overrides)."
+			: "Active overrides: " + string.Join( ", ", activeParts ) + ".";
+
 		List<string> notices = [];
 		if( _theme.NeedsRestart )
-			notices.Add( $"Previewing {EditingThemeText}. Save, then restart HackPDM to finish the switch and edit its colors (menus and dialogs also follow it after the restart)." );
+			notices.Add( $"Previewing {EditingThemeText}. Click Restart HackPDM to finish switching the base Dark/Light theme." );
 		if( _theme.StyleNeedsRestart )
-			notices.Add( $"Panels and the dependency graph already show the {ThemePresets.Form( _theme.Form ).Title} style; save and restart HackPDM for buttons, lists and other controls to take its corners and spacing." );
+			notices.Add( $"Style/corner/density/font changes are ready — click Soft Reload UI to apply immediately without disconnecting." );
 		RestartNotice = string.Join( " ", notices );
 		ShowRestartNotice = notices.Count > 0;
+		CanSoftReloadOnly = _theme.StyleNeedsRestart && !_theme.NeedsRestart;
 	}
 
 	private void PublishSelected()
@@ -255,5 +434,13 @@ public partial class ThemeEditorViewModel : ObservableObject
 		ArgbColor? color = SelectedColor is { } item && ArgbColor.TryParse( item.Hex, out var c ) ? c : null;
 		HexInput = color?.ToString() ?? "";
 		SelectedColorValueChanged?.Invoke( color );
+	}
+
+	public void Dispose()
+	{
+		if( _disposed )
+			return;
+		_disposed = true;
+		_theme.ThemeChanged -= OnThemeServiceChanged;
 	}
 }

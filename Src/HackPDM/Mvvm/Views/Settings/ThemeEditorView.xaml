@@ -74,12 +74,29 @@
                     <Run FontWeight="SemiBold" Text="{x:Bind ViewModel.EditingThemeText, Mode=OneWay}" />
                     <Run Text="colors. Color changes apply live, on top of the preset." />
                 </TextBlock>
-                <InfoBar
-                    IsClosable="False"
-                    IsOpen="True"
-                    Message="{x:Bind ViewModel.RestartNotice, Mode=OneWay}"
-                    Severity="Warning"
-                    Visibility="{x:Bind ViewModel.ShowRestartNotice, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock
+                    FontSize="11"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.OverridesSummary, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+                <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.ShowRestartNotice, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                    <InfoBar
+                        IsClosable="False"
+                        IsOpen="True"
+                        Message="{x:Bind ViewModel.RestartNotice, Mode=OneWay}"
+                        Severity="Warning" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button
+                            x:Name="SoftReloadUiButton"
+                            Command="{x:Bind ViewModel.SoftReloadUiCommand}"
+                            Content="Soft Reload UI" />
+                        <Button
+                            x:Name="FullRestartAppButton"
+                            Command="{x:Bind ViewModel.RestartAppCommand}"
+                            Content="Restart HackPDM"
+                            Style="{StaticResource AccentButtonStyle}" />
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
 
             <ListView
@@ -134,55 +151,111 @@
                 </ListView.ItemTemplate>
             </ListView>
 
-            <StackPanel Grid.Column="1" Grid.RowSpan="2" Spacing="6">
-                <TextBlock Margin="0,8,0,0" Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ViewModel.SelectedColor.Label, Mode=OneWay, FallbackValue=''}" />
-                <TextBlock
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="{x:Bind ViewModel.SelectedColor.Description, Mode=OneWay, FallbackValue=''}"
-                    TextWrapping="Wrap" />
-                <ColorPicker
-                    x:Name="Picker"
-                    IsEnabled="{x:Bind ViewModel.IsEditable, Mode=OneWay}"
-                    ColorChanged="Picker_ColorChanged"
-                    ColorSpectrumShape="Box"
-                    IsAlphaEnabled="True"
-                    IsAlphaSliderVisible="True"
-                    IsColorChannelTextInputVisible="False"
-                    IsColorPreviewVisible="True"
-                    IsHexInputVisible="False"
-                    IsMoreButtonVisible="False" />
-                <TextBox Header="Hex (#AARRGGBB or #RRGGBB)" IsEnabled="{x:Bind ViewModel.IsEditable, Mode=OneWay}" Text="{x:Bind ViewModel.HexInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-            </StackPanel>
+            <ScrollViewer
+                Grid.Row="0"
+                Grid.RowSpan="4"
+                Grid.Column="1"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+                <StackPanel Padding="0,0,6,8" Spacing="8">
+                    <StackPanel Spacing="6">
+                        <TextBlock Margin="0,8,0,0" Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ViewModel.SelectedColor.Label, Mode=OneWay, FallbackValue=''}" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind ViewModel.SelectedColor.Description, Mode=OneWay, FallbackValue=''}"
+                            TextWrapping="Wrap" />
+                        <ColorPicker
+                            x:Name="Picker"
+                            ColorChanged="Picker_ColorChanged"
+                            ColorSpectrumShape="Box"
+                            IsAlphaEnabled="True"
+                            IsAlphaSliderVisible="True"
+                            IsColorChannelTextInputVisible="False"
+                            IsColorPreviewVisible="True"
+                            IsEnabled="{x:Bind ViewModel.IsEditable, Mode=OneWay}"
+                            IsHexInputVisible="False"
+                            IsMoreButtonVisible="False" />
+                        <TextBox Header="Hex (#AARRGGBB or #RRGGBB)" IsEnabled="{x:Bind ViewModel.IsEditable, Mode=OneWay}" Text="{x:Bind ViewModel.HexInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
 
-            <StackPanel Grid.Row="2" Grid.RowSpan="2" Grid.Column="1" VerticalAlignment="Bottom" Spacing="6">
-                <Grid ColumnSpacing="6" RowSpacing="6">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Button
-                        HorizontalAlignment="Stretch"
-                        Command="{x:Bind ViewModel.SaveCommand}"
-                        Content="Save theme"
-                        Style="{StaticResource AccentButtonStyle}" />
-                    <Button Grid.Column="1" HorizontalAlignment="Stretch" Command="{x:Bind ViewModel.RevertCommand}" Content="Undo unsaved" />
-                    <Button Grid.Row="1" HorizontalAlignment="Stretch" Command="{x:Bind ViewModel.ResetSelectedCommand}" Content="Reset color" />
-                    <Button Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" Command="{x:Bind ViewModel.ResetAllCommand}" Content="Reset all colors" />
-                </Grid>
-                <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" TextWrapping="Wrap" />
-                <TextBlock
-                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                    IsTextSelectionEnabled="True"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    TextWrapping="Wrap">
-                    <Run Text="Saved to" />
-                    <Run Text="{x:Bind ViewModel.SavePath}" />
-                </TextBlock>
-            </StackPanel>
+                    <!--  Saved Custom Themes (AI or user-created)  -->
+                    <Border
+                        Padding="8"
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        CornerRadius="4">
+                        <StackPanel Spacing="6">
+                            <TextBlock FontSize="12" FontWeight="SemiBold" Text="Saved Custom Themes" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                <TextBox
+                                    x:Name="NewCustomThemeNameBox"
+                                    PlaceholderText="Save current as theme..."
+                                    Text="{x:Bind ViewModel.NewCustomThemeName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button
+                                    x:Name="SaveCustomThemeButton"
+                                    Grid.Column="1"
+                                    Command="{x:Bind ViewModel.SaveCustomThemeCommand}"
+                                    Content="Save" />
+                            </Grid>
+                            <Grid
+                                ColumnDefinitions="*,Auto,Auto"
+                                ColumnSpacing="4"
+                                Visibility="{x:Bind ViewModel.HasCustomThemes, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                <ComboBox
+                                    x:Name="CustomThemePicker"
+                                    HorizontalAlignment="Stretch"
+                                    ItemsSource="{x:Bind ViewModel.CustomThemeNames}"
+                                    SelectedItem="{x:Bind ViewModel.SelectedCustomTheme, Mode=TwoWay}" />
+                                <Button
+                                    x:Name="LoadCustomThemeButton"
+                                    Grid.Column="1"
+                                    Command="{x:Bind ViewModel.LoadCustomThemeCommand}"
+                                    Content="Load" />
+                                <Button
+                                    x:Name="DeleteCustomThemeButton"
+                                    Grid.Column="2"
+                                    Command="{x:Bind ViewModel.DeleteCustomThemeCommand}"
+                                    Content="Del" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid ColumnSpacing="6" RowSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Button
+                            HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.SaveCommand}"
+                            Content="Save theme"
+                            Style="{StaticResource AccentButtonStyle}" />
+                        <Button Grid.Column="1" HorizontalAlignment="Stretch" Command="{x:Bind ViewModel.RevertCommand}" Content="Undo unsaved" />
+                        <Button Grid.Row="1" HorizontalAlignment="Stretch" Command="{x:Bind ViewModel.ResetSelectedCommand}" Content="Reset color" />
+                        <Button Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" Command="{x:Bind ViewModel.ResetAllCommand}" Content="Reset all colors" />
+                        <Button
+                            x:Name="RestoreFactoryDefaultsButton"
+                            Grid.Row="2"
+                            Grid.ColumnSpan="2"
+                            HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.RestoreFactoryDefaultsCommand}"
+                            Content="Restore Factory Defaults" />
+                    </Grid>
+                    <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" TextWrapping="Wrap" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        IsTextSelectionEnabled="True"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        TextWrapping="Wrap">
+                        <Run Text="Saved to" />
+                        <Run Text="{x:Bind ViewModel.SavePath}" />
+                    </TextBlock>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
         <!--  Preview: every control type the app uses  -->

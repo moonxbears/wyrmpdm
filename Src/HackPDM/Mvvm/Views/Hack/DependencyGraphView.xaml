@@ -388,49 +388,236 @@
 				<RowDefinition Height="*" />
 				<RowDefinition Height="Auto" />
 			</Grid.RowDefinitions>
-			<StackPanel
-				Grid.Row="0"
-				Orientation="Horizontal"
-				Spacing="6">
-				<RadioButton
-					x:Name="ShowChildren"
-					Content="Children"
-					GroupName="GraphDirection"
-					IsChecked="True" />
-				<RadioButton
-					x:Name="ShowParents"
-					Content="Parents"
-					GroupName="GraphDirection" />
-				<RadioButton
-					x:Name="ShowBoth"
-					Content="Both"
-					GroupName="GraphDirection" />
-				<AppBarSeparator />
-				<Button
-					x:Name="ZoomOut"
-					Content="−"
-					MinWidth="36"
-					ToolTipService.ToolTip="Zoom out" />
-				<TextBlock
-					x:Name="ZoomText"
-					MinWidth="48"
-					VerticalAlignment="Center"
-					Text="100%"
-					TextAlignment="Center" />
-				<Button
-					x:Name="ZoomIn"
-					Content="+"
-					MinWidth="36"
-					ToolTipService.ToolTip="Zoom in" />
-				<Button
-					x:Name="FitButton"
-					Content="Fit"
-					ToolTipService.ToolTip="Show the whole graph" />
-				<ProgressRing
-					x:Name="Busy"
-					Width="20"
-					Height="20"
-					IsActive="False" />
+			<StackPanel Grid.Row="0" Spacing="5">
+				<!--  Row 0A: View mode, direction, zoom, and filters toggle  -->
+				<ScrollViewer
+					HorizontalScrollBarVisibility="Auto"
+					VerticalScrollBarVisibility="Disabled">
+					<StackPanel
+						Orientation="Horizontal"
+						Spacing="6">
+						<ComboBox
+							x:Name="ViewModeCombo"
+							MinWidth="148"
+							SelectedIndex="0"
+							ToolTipService.ToolTip="Choose how the node graph is constructed">
+							<ComboBoxItem Content="Dependencies" Tag="Dependencies" />
+							<ComboBoxItem Content="Folder Structure" Tag="FolderStructure" />
+							<ComboBoxItem Content="Folders &amp; Files" Tag="FoldersAndFiles" />
+							<ComboBoxItem Content="Group by Property" Tag="ByProperty" />
+							<ComboBoxItem Content="Search / Filter" Tag="SearchFilter" />
+						</ComboBox>
+						<StackPanel
+							x:Name="DirectionPanel"
+							Orientation="Horizontal"
+							Spacing="4">
+							<RadioButton
+								x:Name="ShowChildren"
+								MinWidth="0"
+								Content="Children"
+								GroupName="GraphDirection"
+								IsChecked="True" />
+							<RadioButton
+								x:Name="ShowParents"
+								MinWidth="0"
+								Content="Parents"
+								GroupName="GraphDirection" />
+							<RadioButton
+								x:Name="ShowBoth"
+								MinWidth="0"
+								Content="Both"
+								GroupName="GraphDirection" />
+							<RadioButton
+								x:Name="ShowFullNetwork"
+								MinWidth="0"
+								Content="Full Network"
+								GroupName="GraphDirection"
+								ToolTipService.ToolTip="Show parents, children, and recursively each parent's and child's parents &amp; children" />
+						</StackPanel>
+						<AppBarSeparator />
+						<Button
+							x:Name="ZoomOut"
+							Content="−"
+							MinWidth="32"
+							ToolTipService.ToolTip="Zoom out" />
+						<TextBlock
+							x:Name="ZoomText"
+							MinWidth="44"
+							VerticalAlignment="Center"
+							Text="100%"
+							TextAlignment="Center" />
+						<Button
+							x:Name="ZoomIn"
+							Content="+"
+							MinWidth="32"
+							ToolTipService.ToolTip="Zoom in" />
+						<Button
+							x:Name="FitButton"
+							Content="Fit"
+							ToolTipService.ToolTip="Show the whole graph" />
+						<ToggleButton
+							x:Name="ToggleFiltersBtn"
+							Padding="8,4"
+							IsChecked="True"
+							ToolTipService.ToolTip="Show or hide depth, branch limits, and filter controls">
+							<StackPanel Orientation="Horizontal" Spacing="5">
+								<FontIcon FontSize="11" Glyph="&#xE71C;" />
+								<TextBlock VerticalAlignment="Center" FontSize="12" Text="Filters" />
+							</StackPanel>
+						</ToggleButton>
+						<ProgressRing
+							x:Name="Busy"
+							Width="20"
+							Height="20"
+							IsActive="False" />
+					</StackPanel>
+				</ScrollViewer>
+
+				<!--  Row 0B: Depth, offspring/parent branch limits, file type & property filters  -->
+				<Border
+					x:Name="FilterBarCard"
+					Padding="8,5"
+					Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+					BorderBrush="{StaticResource HackPanelStrokeBrush}"
+					BorderThickness="1"
+					CornerRadius="6">
+					<Grid ColumnSpacing="8">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="Auto" />
+						</Grid.ColumnDefinitions>
+						<ScrollViewer
+							Grid.Column="0"
+							HorizontalScrollBarVisibility="Auto"
+							VerticalScrollBarVisibility="Disabled">
+							<StackPanel Spacing="4">
+								<!--  Depth & branch fan-out / fan-in limits  -->
+								<StackPanel Orientation="Horizontal" Spacing="5">
+									<TextBlock VerticalAlignment="Center" FontSize="11" Opacity="0.75" Text="Depth:" />
+									<ComboBox
+										x:Name="DepthCombo"
+										MinWidth="58"
+										SelectedIndex="0"
+										ToolTipService.ToolTip="Overall maximum hop/level depth (All = unlimited)">
+										<ComboBoxItem Content="All" Tag="0" />
+										<ComboBoxItem Content="1" Tag="1" />
+										<ComboBoxItem Content="2" Tag="2" />
+										<ComboBoxItem Content="3" Tag="3" />
+										<ComboBoxItem Content="4" Tag="4" />
+										<ComboBoxItem Content="5" Tag="5" />
+										<ComboBoxItem Content="8" Tag="8" />
+									</ComboBox>
+									<TextBlock VerticalAlignment="Center" FontSize="11" Opacity="0.75" Text="Kid depth:" />
+									<TextBox
+										x:Name="ChildDepthBox"
+										Width="42"
+										PlaceholderText="All"
+										ToolTipService.ToolTip="Max offspring/child depth (blank = inherit Depth, 0 = none)" />
+									<TextBlock VerticalAlignment="Center" FontSize="11" Opacity="0.75" Text="Par depth:" />
+									<TextBox
+										x:Name="ParentDepthBox"
+										Width="42"
+										PlaceholderText="All"
+										ToolTipService.ToolTip="Max parent depth (blank = inherit Depth, 0 = none)" />
+									<TextBlock VerticalAlignment="Center" FontSize="11" Opacity="0.75" Text="Kids/node:" />
+									<TextBox
+										x:Name="ChildBranchesBox"
+										Width="42"
+										PlaceholderText="All"
+										ToolTipService.ToolTip="Maximum offspring/child branches expanded per node (blank = unlimited, 0 = none)" />
+									<TextBlock VerticalAlignment="Center" FontSize="11" Opacity="0.75" Text="Par/node:" />
+									<TextBox
+										x:Name="ParentBranchesBox"
+										Width="42"
+										PlaceholderText="All"
+										ToolTipService.ToolTip="Maximum parent branches expanded per node (blank = unlimited, 0 = none)" />
+									<CheckBox
+										x:Name="BridgeLinksCheck"
+										MinWidth="0"
+										Content="Bridge"
+										IsChecked="True"
+										ToolTipService.ToolTip="Keep dependency lineage connected when intermediate nodes are filtered out" />
+									<CheckBox
+										x:Name="KeepRootsCheck"
+										MinWidth="0"
+										Content="Roots"
+										IsChecked="True"
+										ToolTipService.ToolTip="Keep selected root nodes even if file filters do not match them" />
+									<CheckBox
+										x:Name="DepLinksOverlayCheck"
+										MinWidth="0"
+										Content="+ Deps"
+										IsChecked="False"
+										ToolTipService.ToolTip="Overlay file-to-file dependency links in Folder, Property, and Search views" />
+								</StackPanel>
+
+								<!--  File type, search & property criteria  -->
+								<StackPanel Orientation="Horizontal" Spacing="5">
+									<ComboBox
+										x:Name="FileTypePresetCombo"
+										MinWidth="106"
+										SelectedIndex="0"
+										ToolTipService.ToolTip="Quick file-type filter preset">
+										<ComboBoxItem Content="All Types" Tag="" />
+										<ComboBoxItem Content="SLDPRT Only" Tag="sldprt" />
+										<ComboBoxItem Content="SLDASM Only" Tag="sldasm" />
+										<ComboBoxItem Content="SLDDRW Only" Tag="slddrw" />
+										<ComboBoxItem Content="CAD Only" Tag="sldprt,sldasm,slddrw" />
+										<ComboBoxItem Content="PDF Only" Tag="pdf" />
+										<ComboBoxItem Content="Custom" Tag="__custom__" />
+									</ComboBox>
+									<TextBox
+										x:Name="ExtensionsFilterBox"
+										Width="88"
+										PlaceholderText="ext: sldprt"
+										ToolTipService.ToolTip="Comma-separated file extensions or aliases (e.g. sldprt, sldasm, slddrw, pdf)" />
+									<TextBox
+										x:Name="NameFilterBox"
+										Width="106"
+										PlaceholderText="Name / *glob*"
+										ToolTipService.ToolTip="Filter nodes by name substring or * / ? wildcard" />
+									<TextBox
+										x:Name="PathFilterBox"
+										Width="96"
+										PlaceholderText="Folder / path"
+										ToolTipService.ToolTip="Filter nodes by server path substring or wildcard" />
+									<TextBox
+										x:Name="PropertyNameBox"
+										Width="102"
+										PlaceholderText="Property / Group"
+										ToolTipService.ToolTip="Property or field to filter or group by (e.g. Material, Revision, Category, Extension, CheckoutUser, Folder)" />
+									<TextBox
+										x:Name="PropertyValueBox"
+										Width="82"
+										PlaceholderText="Value"
+										ToolTipService.ToolTip="Optional value filter for Property (substring or wildcard)" />
+									<CheckBox
+										x:Name="CheckedOutFilterCheck"
+										MinWidth="0"
+										Content="Checked out"
+										ToolTipService.ToolTip="Show only checked-out files" />
+								</StackPanel>
+							</StackPanel>
+						</ScrollViewer>
+						<!--  Pinned right-side Apply / Reset actions so they never scroll off-screen  -->
+						<StackPanel
+							Grid.Column="1"
+							VerticalAlignment="Center"
+							Spacing="4">
+							<Button
+								x:Name="ApplyFilterBtn"
+								MinWidth="68"
+								Padding="10,4"
+								Content="Apply"
+								Style="{StaticResource AccentButtonStyle}" />
+							<Button
+								x:Name="ResetFilterBtn"
+								MinWidth="68"
+								Padding="10,4"
+								Content="Reset" />
+						</StackPanel>
+					</Grid>
+				</Border>
 			</StackPanel>
 			<Border
 				Grid.Row="1"
@@ -474,7 +661,7 @@
 					<!--  details of the clicked file, over the bottom of the graph  -->
 					<Border
 						x:Name="DetailPanel"
-						Height="320"
+						Height="344"
 						Margin="8"
 						Padding="10"
 						VerticalAlignment="Bottom"
@@ -485,7 +672,7 @@
 						Visibility="Collapsed">
 						<Grid ColumnSpacing="12">
 							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="296" />
+								<ColumnDefinition Width="312" />
 								<ColumnDefinition Width="*" />
 							</Grid.ColumnDefinitions>
 
@@ -559,12 +746,16 @@
 									<TextBlock Grid.Row="3" Style="{StaticResource InfoLabel}" Text="Used by" />
 									<TextBlock x:Name="InfoUsedBy" Grid.Row="3" Grid.Column="1" Style="{StaticResource InfoValue}" />
 								</Grid>
-								<StackPanel
-									Grid.Row="3"
-									Orientation="Horizontal"
-									Spacing="6">
-									<Button x:Name="InfoFocus" Content="Graph around it" ToolTipService.ToolTip="Draw the graph around this file (or double-click its box)" />
-									<Button x:Name="InfoLocate" Content="Show in file manager" />
+								<StackPanel Grid.Row="3" Spacing="4">
+									<StackPanel Orientation="Horizontal" Spacing="6">
+										<Button x:Name="InfoFocus" Content="Graph around it" ToolTipService.ToolTip="Draw the graph around this item (or double-click its box)" />
+										<Button x:Name="InfoLocate" Content="Show in file manager" />
+									</StackPanel>
+									<Button
+										x:Name="InfoExpandNeighbors"
+										HorizontalAlignment="Stretch"
+										Content="Expand neighbors (parents &amp; children)"
+										ToolTipService.ToolTip="Fetch this file's parents and children and merge them into the current graph" />
 								</StackPanel>
 							</Grid>
 

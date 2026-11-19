@@ -904,6 +904,7 @@ public sealed partial class HackFileManagerView : Page
 
 		ImageSlot.Children.Remove( OdooEntryImage );
 		_pipWindow = new PipWindow();
+		WindowHelper.RegisterWindow( _pipWindow );
 		_pipWindow.HostComponent( OdooEntryImage );
 		_pipWindow.ReturnRequested += ( _, _ ) => ReturnPreviewToPage();
 		_pipWindow.Closed += OnPipWindowClosed;
@@ -1461,6 +1462,29 @@ public sealed partial class HackFileManagerView : Page
 	{
 		get => VersionTabs.SelectedItem as TabViewItem;
 		set => VersionTabs.SelectedItem = value;
+	}
+	internal string FolderFilterText => FolderFilterBox.Text ?? string.Empty;
+	internal void SetFolderFilter( string text ) => FolderFilterBox.Text = text ?? string.Empty;
+	internal string CurrentTopTabName => ( ListTabs.SelectedItem as TabViewItem )?.Name ?? string.Empty;
+	internal bool IsPipOpen => _pipWindow is not null;
+	internal void ExpandAllForMcp() => ExpandAllFolders_Click( this, null! );
+	internal void CollapseAllForMcp() => CollapseAllFolders_Click( this, null! );
+	internal void TogglePipForMcp() => OnTogglePipClicked( this, null! );
+	internal void ApplyWorkspaceLayoutForMcp()
+	{
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+	internal void SelectDirectoryForMcp( TreeViewNode node ) => JumpToTreeNode( node );
+	internal bool SelectDetailTabByName( string tabName )
+	{
+		TabViewItem? target = VersionTabs.TabItems.OfType<TabViewItem>().FirstOrDefault( t =>
+			string.Equals( t.Name, tabName, StringComparison.OrdinalIgnoreCase )
+			|| string.Equals( t.Header?.ToString(), tabName, StringComparison.OrdinalIgnoreCase ) );
+		if( target is null )
+			return false;
+		VersionTabs.SelectedItem = target;
+		return true;
 	}
 
 	#endregion

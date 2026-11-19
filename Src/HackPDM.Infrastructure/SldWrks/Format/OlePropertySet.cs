@@ -163,4 +163,279 @@ public static class OlePropertySet
 		public const ushort I2 = 2, I4 = 3, R4 = 4, R8 = 5, Date = 7, Bool = 11, I8 = 20,
 			UI4 = 19, Int = 22, UInt = 23, LpStr = 30, LpWStr = 31, FileTime = 64;
 	}
+
+	/// <summary>
+	/// Rebuilds an MS-OLEPS property set stream with the given user-defined properties while preserving
+	/// any other sections (such as <c>FMTID_DocSummaryInformation</c>) verbatim.
+	/// </summary>
+	public static byte[] WriteUserDefined(
+		byte[]? existingStream,
+		IReadOnlyList<(string Name, ushort VarType, object? Value)> properties )
+	{
+		List<(Guid FmtId, byte[] RawSection)> preservedSections = [];
+		byte[] headerPrefix = new byte[ 24 ];
+		BinaryPrimitives.WriteUInt16LittleEndian( headerPrefix.AsSpan( 0 ), 0xFFFE );
+		BinaryPrimitives.WriteUInt16LittleEndian( headerPrefix.AsSpan( 2 ), 0x0000 );
+		BinaryPrimitives.WriteUInt32LittleEndian( headerPrefix.AsSpan( 4 ), 0x00020105 ); // Windows OS version
+
+		if( existingStream is { Length: >= 28 }
+			&& BinaryPrimitives.ReadUInt16LittleEndian( existingStream ) == 0xFFFE )
+		{
+			existingStream.AsSpan( 0, 24 ).CopyTo( headerPrefix );
+			uint existingCount = BinaryPrimitives.ReadUInt32LittleEndian( existingStream.AsSpan( 24 ) );
+			for( int s = 0; s < existingCount && 28 + s * 20 + 20 <= existingStream.Length; s++ )
+			{
+				Guid fmtid = new( existingStream.AsSpan( 28 + s * 20, 16 ) );
+				if( fmtid == UserDefined )
+					continue;
+				int secStart = (int)BinaryPrimitives.ReadUInt32LittleEndian( existingStream.AsSpan( 28 + s * 20 + 16 ) );
+				if( secStart < 0 || secStart + 4 > existingStream.Length )
+					continue;
+				int secSize = (int)BinaryPrimitives.ReadUInt32LittleEndian( existingStream.AsSpan( secStart ) );
+				if( secSize <= 0 || secStart + secSize > existingStream.Length )
+					secSize = existingStream.Length - secStart;
+				byte[] raw = existingStream.AsSpan( secStart, secSize ).ToArray();
+				preservedSections.Add( ( fmtid, raw ) );
+			}
+		}
+
+		byte[] userSection = BuildUserDefinedSection( properties );
+		preservedSections.Add( ( UserDefined, userSection ) );
+
+		int sectionCount = preservedSections.Count;
+		int headerSize = 28 + sectionCount * 20;
+		using MemoryStream ms = new();
+		ms.Write( headerPrefix );
+		WriteUInt32( ms, (uint)sectionCount );
+
+		int[] offsets = new int[ sectionCount ];
+		int cursor = Align4( headerSize );
+		for( int i = 0; i < sectionCount; i++ )
+		{
+			offsets[ i ] = cursor;
+			cursor = Align4( cursor + preservedSections[ i ].RawSection.Length );
+		}
+
+		for( int i = 0; i < sectionCount; i++ )
+		{
+			ms.Write( preservedSections[ i ].FmtId.ToByteArray() );
+			WriteUInt32( ms, (uint)offsets[ i ] );
+		}
+
+		for( int i = 0; i < sectionCount; i++ )
+		{
+			PadTo( ms, offsets[ i ] );
+			ms.Write( preservedSections[ i ].RawSection );
+		}
+		PadTo( ms, Align4( (int)ms.Length ) );
+		return ms.ToArray();
+	}
+
+	private static byte[] BuildUserDefinedSection( IReadOnlyList<(string Name, ushort VarType, object? Value)> properties )
+	{
+		bool needsUnicode = properties.Any( p =>
+			HasNonAscii( p.Name )
+			|| ( p.Value is string sv && HasNonAscii( sv ) ) );
+
+		ushort codePage = needsUnicode ? (ushort)1200 : (ushort)1252;
+		Encoding textEnc = needsUnicode ? Encoding.Unicode : Encoding.Latin1;
+
+		// Filter out empty names and assign PIDs starting at 2
+		List<(uint Pid, string Name, ushort VarType, object? Value)> items = [];
+		uint nextPid = 2;
+		foreach( var p in properties )
+		{
+			if( string.IsNullOrWhiteSpace( p.Name ) )
+				continue;
+			items.Add( ( nextPid++, p.Name, p.VarType, p.Value ) );
+		}
+
+		// Serialize dictionary (PID 0)
+		byte[] dictBytes;
+		using( MemoryStream dictMs = new() )
+		{
+			WriteUInt32( dictMs, (uint)items.Count );
+			foreach( var item in items )
+			{
+				WriteUInt32( dictMs, item.Pid );
+				if( codePage == 1200 )
+				{
+					byte[] nameUtf16 = Encoding.Unicode.GetBytes( item.Name + "\0" );
+					WriteUInt32( dictMs, (uint)( item.Name.Length + 1 ) );
+					dictMs.Write( nameUtf16 );
+					PadTo( dictMs, Align4( (int)dictMs.Length ) );
+				}
+				else
+				{
+					byte[] nameBytes = textEnc.GetBytes( item.Name + "\0" );
+					WriteUInt32( dictMs, (uint)nameBytes.Length );
+					dictMs.Write( nameBytes );
+				}
+			}
+			PadTo( dictMs, Align4( (int)dictMs.Length ) );
+			dictBytes = dictMs.ToArray();
+		}
+
+		// Serialize code page (PID 1)
+		byte[] cpBytes = new byte[ 8 ];
+		BinaryPrimitives.WriteUInt16LittleEndian( cpBytes.AsSpan( 0 ), VarType.I2 );
+		BinaryPrimitives.WriteUInt16LittleEndian( cpBytes.AsSpan( 4 ), codePage );
+
+		// Serialize each property value
+		List<(uint Pid, byte[] Bytes)> serialized =
+		[
+			( PidDictionary, dictBytes ),
+			( PidCodePage, cpBytes ),
+		];
+		foreach( var item in items )
+			serialized.Add( ( item.Pid, SerializePropertyValue( item.VarType, item.Value, codePage, textEnc ) ) );
+
+		int tableOffset = 8;
+		int dataStart = tableOffset + serialized.Count * 8;
+		int[] propOffsets = new int[ serialized.Count ];
+		int relCursor = dataStart;
+		for( int i = 0; i < serialized.Count; i++ )
+		{
+			propOffsets[ i ] = relCursor;
+			relCursor = Align4( relCursor + serialized[ i ].Bytes.Length );
+		}
+
+		using MemoryStream secMs = new();
+		WriteUInt32( secMs, (uint)relCursor ); // cbSection
+		WriteUInt32( secMs, (uint)serialized.Count ); // cProperties
+		for( int i = 0; i < serialized.Count; i++ )
+		{
+			WriteUInt32( secMs, serialized[ i ].Pid );
+			WriteUInt32( secMs, (uint)propOffsets[ i ] );
+		}
+		for( int i = 0; i < serialized.Count; i++ )
+		{
+			PadTo( secMs, propOffsets[ i ] );
+			secMs.Write( serialized[ i ].Bytes );
+		}
+		PadTo( secMs, relCursor );
+		return secMs.ToArray();
+	}
+
+	private static byte[] SerializePropertyValue( ushort varType, object? value, ushort codePage, Encoding textEnc )
+	{
+		using MemoryStream ms = new();
+		switch( varType )
+		{
+			case VarType.Bool:
+			{
+				bool b = value switch
+				{
+					bool bv => bv,
+					string sv => sv.Trim().ToLowerInvariant() is "yes" or "true" or "1" or "-1",
+					_ => Convert.ToBoolean( value ?? false, System.Globalization.CultureInfo.InvariantCulture ),
+				};
+				WriteUInt16( ms, VarType.Bool );
+				WriteUInt16( ms, 0 );
+				WriteInt16( ms, b ? (short)-1 : (short)0 );
+				WriteUInt16( ms, 0 );
+				break;
+			}
+			case VarType.I4 or VarType.Int:
+			{
+				int iv = Convert.ToInt32( value ?? 0, System.Globalization.CultureInfo.InvariantCulture );
+				WriteUInt16( ms, VarType.I4 );
+				WriteUInt16( ms, 0 );
+				WriteInt32( ms, iv );
+				break;
+			}
+			case VarType.R8:
+			{
+				double dv = Convert.ToDouble( value ?? 0d, System.Globalization.CultureInfo.InvariantCulture );
+				WriteUInt16( ms, VarType.R8 );
+				WriteUInt16( ms, 0 );
+				byte[] buf = new byte[ 8 ];
+				BinaryPrimitives.WriteDoubleLittleEndian( buf, dv );
+				ms.Write( buf );
+				break;
+			}
+			case VarType.FileTime or VarType.Date:
+			{
+				DateTime dt = value switch
+				{
+					DateTime d => d.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind( d, DateTimeKind.Utc ) : d.ToUniversalTime(),
+					DateTimeOffset dto => dto.UtcDateTime,
+					string s when DateTime.TryParse( s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed ) => parsed,
+					_ => DateTime.UtcNow,
+				};
+				WriteUInt16( ms, VarType.FileTime );
+				WriteUInt16( ms, 0 );
+				byte[] buf = new byte[ 8 ];
+				BinaryPrimitives.WriteInt64LittleEndian( buf, dt.ToFileTimeUtc() );
+				ms.Write( buf );
+				break;
+			}
+			default:
+			{
+				string text = value?.ToString() ?? string.Empty;
+				if( codePage == 1200 || varType == VarType.LpWStr )
+				{
+					WriteUInt16( ms, VarType.LpWStr );
+					WriteUInt16( ms, 0 );
+					WriteUInt32( ms, (uint)( text.Length + 1 ) );
+					ms.Write( Encoding.Unicode.GetBytes( text + "\0" ) );
+				}
+				else
+				{
+					WriteUInt16( ms, VarType.LpStr );
+					WriteUInt16( ms, 0 );
+					byte[] raw = textEnc.GetBytes( text + "\0" );
+					WriteUInt32( ms, (uint)raw.Length );
+					ms.Write( raw );
+				}
+				break;
+			}
+		}
+		PadTo( ms, Align4( (int)ms.Length ) );
+		return ms.ToArray();
+	}
+
+	private static bool HasNonAscii( string text )
+	{
+		foreach( char c in text )
+			if( c > 0x7F )
+				return true;
+		return false;
+	}
+
+	private static int Align4( int n ) => ( n + 3 ) & ~3;
+
+	private static void PadTo( MemoryStream ms, int target )
+	{
+		while( ms.Length < target )
+			ms.WriteByte( 0 );
+	}
+
+	private static void WriteUInt16( MemoryStream ms, ushort v )
+	{
+		Span<byte> b = stackalloc byte[ 2 ];
+		BinaryPrimitives.WriteUInt16LittleEndian( b, v );
+		ms.Write( b );
+	}
+
+	private static void WriteInt16( MemoryStream ms, short v )
+	{
+		Span<byte> b = stackalloc byte[ 2 ];
+		BinaryPrimitives.WriteInt16LittleEndian( b, v );
+		ms.Write( b );
+	}
+
+	private static void WriteUInt32( MemoryStream ms, uint v )
+	{
+		Span<byte> b = stackalloc byte[ 4 ];
+		BinaryPrimitives.WriteUInt32LittleEndian( b, v );
+		ms.Write( b );
+	}
+
+	private static void WriteInt32( MemoryStream ms, int v )
+	{
+		Span<byte> b = stackalloc byte[ 4 ];
+		BinaryPrimitives.WriteInt32LittleEndian( b, v );
+		ms.Write( b );
+	}
 }

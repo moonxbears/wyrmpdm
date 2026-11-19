@@ -78,27 +78,148 @@ public static class GraphLayout
 
 		Dictionary<int, int> layer = roots.ToDictionary( r => r, _ => 0 );
 		List<int> discovery = [ .. roots ];
-		HashSet<int> down = [];
-		if( direction != GraphDirection.Parents )
+		if( direction == GraphDirection.FullNetwork )
 		{
-			down = Reach( roots, childrenOf, discovery );
-			Relax( down, rootSet, childrenOf, layer, +1, nodes.Count );
+			ArrangeFullNetworkLayers( nodes, edges, roots, rootSet, childrenOf, parentsOf, layer, discovery );
 		}
-		if( direction != GraphDirection.Children )
+		else
 		{
-			HashSet<int> up = Reach( roots, parentsOf, discovery );
-			up.ExceptWith( down.Except( rootSet ) );
-			Relax( up, rootSet, parentsOf, layer, -1, nodes.Count );
-		}
-		// anything the server sent that is not linked to a selected file joins the selected column
-		foreach( int id in nodes.Keys.Except( layer.Keys ).Order() )
-		{
-			layer[ id ] = 0;
-			discovery.Add( id );
+			HashSet<int> down = [];
+			if( direction != GraphDirection.Parents )
+			{
+				down = Reach( roots, childrenOf, discovery );
+				Relax( down, rootSet, childrenOf, layer, +1, nodes.Count );
+			}
+			if( direction != GraphDirection.Children )
+			{
+				HashSet<int> up = Reach( roots, parentsOf, discovery );
+				up.ExceptWith( down.Except( rootSet ) );
+				Relax( up, rootSet, parentsOf, layer, -1, nodes.Count );
+			}
+			// anything the server sent that is not linked to a selected file joins the selected column
+			foreach( int id in nodes.Keys.Except( layer.Keys ).Order() )
+			{
+				layer[ id ] = 0;
+				discovery.Add( id );
+			}
 		}
 
 		List<List<int>> columns = OrderColumns( layer, discovery, childrenOf, parentsOf );
 		return Place( columns, layer, nodes, rootSet, edges, options );
+	}
+
+	/// <summary>
+	/// Bidirectional longest-path layering for <see cref="GraphDirection.FullNetwork"/>: places roots at
+	/// layer 0, traverses both parents and children recursively across siblings and co-parents, and enforces
+	/// <c>layer[Parent] &lt; layer[Child]</c> for every acyclic edge while safely bounding cycles.
+	/// </summary>
+	private static void ArrangeFullNetworkLayers(
+		Dictionary<int, GraphNode> nodes,
+		List<GraphEdge> edges,
+		List<int> roots,
+		HashSet<int> rootSet,
+		ILookup<int, int> childrenOf,
+		ILookup<int, int> parentsOf,
+		Dictionary<int, int> layer,
+		List<int> discovery )
+	{
+		HashSet<int> discoverySet = [ .. discovery ];
+		HashSet<int> ancestorsOfRoots = Reach( roots, parentsOf, [ .. roots ] );
+
+		void BfsComponent( IEnumerable<int> seeds )
+		{
+			Queue<int> queue = new();
+			foreach( int seed in seeds )
+			{
+				if( !layer.ContainsKey( seed ) )
+					layer[ seed ] = 0;
+				if( discoverySet.Add( seed ) )
+					discovery.Add( seed );
+				queue.Enqueue( seed );
+			}
+
+			while( queue.TryDequeue( out int u ) )
+			{
+				int uLayer = layer[ u ];
+				foreach( int c in childrenOf[ u ] )
+				{
+					if( !layer.ContainsKey( c ) )
+					{
+						layer[ c ] = uLayer + 1;
+						if( discoverySet.Add( c ) )
+							discovery.Add( c );
+						queue.Enqueue( c );
+					}
+				}
+				foreach( int p in parentsOf[ u ] )
+				{
+					if( !layer.ContainsKey( p ) )
+					{
+						layer[ p ] = uLayer - 1;
+						if( discoverySet.Add( p ) )
+							discovery.Add( p );
+						queue.Enqueue( p );
+					}
+				}
+			}
+		}
+
+		if( roots.Count > 0 )
+			BfsComponent( roots );
+
+		// Lay out any disconnected components cleanly starting from their top-level sources.
+		foreach( int id in nodes.Keys.Order() )
+		{
+			if( layer.ContainsKey( id ) )
+				continue;
+			List<int> unplacedSources = [ .. nodes.Keys.Where( k => !layer.ContainsKey( k ) && !parentsOf[ k ].Any() ).Order() ];
+			BfsComponent( unplacedSources.Count > 0 ? [ unplacedSources[ 0 ] ] : [ id ] );
+		}
+
+		int limit = Math.Max( 1, nodes.Count );
+		for( int pass = 0; pass < limit; pass++ )
+		{
+			bool changed = false;
+			foreach( GraphEdge e in edges )
+			{
+				if( !layer.TryGetValue( e.Parent, out int lp ) || !layer.TryGetValue( e.Child, out int lc ) )
+					continue;
+				if( lp < lc )
+					continue;
+				if( rootSet.Contains( e.Parent ) && rootSet.Contains( e.Child ) )
+					continue;
+
+				if( ancestorsOfRoots.Contains( e.Child ) && !rootSet.Contains( e.Parent ) )
+				{
+					int want = lc - 1;
+					if( Math.Abs( want ) <= limit && want < lp )
+					{
+						layer[ e.Parent ] = want;
+						changed = true;
+					}
+				}
+				else if( !rootSet.Contains( e.Child ) )
+				{
+					int want = lp + 1;
+					if( Math.Abs( want ) <= limit && want > lc )
+					{
+						layer[ e.Child ] = want;
+						changed = true;
+					}
+				}
+				else if( !rootSet.Contains( e.Parent ) )
+				{
+					int want = lc - 1;
+					if( Math.Abs( want ) <= limit && want < lp )
+					{
+						layer[ e.Parent ] = want;
+						changed = true;
+					}
+				}
+			}
+			if( !changed )
+				break;
+		}
 	}
 
 	/// <summary>Everything reachable from <paramref name="roots"/> through <paramref name="next"/>, the roots included; new ids are appended to <paramref name="discovery"/>.</summary>
@@ -179,7 +300,8 @@ public static class GraphLayout
 	private static GraphLayoutResult Place( List<List<int>> columns, Dictionary<int, int> layer, Dictionary<int, GraphNode> nodes,
 		HashSet<int> roots, List<GraphEdge> edges, LayoutOptions o )
 	{
-		var sizes = nodes.ToDictionary( p => p.Key, p => BoxSize( p.Value.Size, o ) );
+		var sizes = nodes.ToDictionary( p => p.Key, p => BoxSize(
+			p.Value.Role == GraphNodeRole.File ? p.Value.Size : Math.Max( p.Value.Size, 650_000L ), o ) );
 		double[] columnWidth = [ .. columns.Select( c => c.Max( id => sizes[ id ].Width ) ) ];
 		double[] columnHeight = [ .. columns.Select( c => c.Sum( id => sizes[ id ].Height ) + o.RowGap * ( c.Count - 1 ) ) ];
 		double tallest = columnHeight.Max();

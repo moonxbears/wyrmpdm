@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 using HackPDM.Mvvm.ViewModels.Common;
@@ -51,6 +53,50 @@ public sealed partial class MessageBox : Page
 
 	private TaskCompletionSource<DialogResult> _result = new();
 	private Window? _window;
+	private string _dialogId = string.Empty;
+	private string _title = string.Empty;
+	private string _message = string.Empty;
+	private ButtonSpec[] _buttonSpecs = [];
+
+	private static readonly Lock ActiveDialogsGate = new();
+	private static readonly List<MessageBox> ActiveDialogs = [];
+	private static int _nextDialogSeq;
+
+	internal sealed record ActiveDialogInfo( string DialogId, string Title, string Message, IReadOnlyList<string> Buttons );
+
+	internal static IReadOnlyList<ActiveDialogInfo> GetActiveDialogs()
+	{
+		lock( ActiveDialogsGate )
+		{
+			return
+			[
+				.. ActiveDialogs.Select( d => new ActiveDialogInfo(
+					d._dialogId,
+					d._title,
+					d._message,
+					[ .. d._buttonSpecs.Select( b => b.Result.ToString() ) ] ) ),
+			];
+		}
+	}
+
+	internal static bool TryRespond( string? dialogId, DialogResult result, out ActiveDialogInfo? responded )
+	{
+		MessageBox? target;
+		lock( ActiveDialogsGate )
+		{
+			target = string.IsNullOrWhiteSpace( dialogId )
+				? ActiveDialogs.LastOrDefault()
+				: ActiveDialogs.FirstOrDefault( d => string.Equals( d._dialogId, dialogId, StringComparison.OrdinalIgnoreCase ) );
+		}
+		if( target is null )
+		{
+			responded = null;
+			return false;
+		}
+		responded = new ActiveDialogInfo( target._dialogId, target._title, target._message, [ .. target._buttonSpecs.Select( b => b.Result.ToString() ) ] );
+		target.Close( result );
+		return true;
+	}
 
 	public MessageBox()
 	{
@@ -62,6 +108,9 @@ public sealed partial class MessageBox : Page
 	{
 		_window = window;
 		_result = result;
+		_dialogId = $"dialog-{System.Threading.Interlocked.Increment( ref _nextDialogSeq )}";
+		_title = window.Title ?? "Info";
+		_message = message;
 		gridRoot.Margin = new Thickness( 4 );
 		gridRoot.UseLayoutRounding = true;
 		gridRoot.CornerRadius = new CornerRadius( 10 );
@@ -81,6 +130,9 @@ public sealed partial class MessageBox : Page
 		text.SetGrid( 0, 0, 3, 4 );
 
 		ButtonSpec[] specs = Layouts.GetValueOrDefault( buttons ) ?? Layouts[ MessageBoxButtons.OK ];
+		_buttonSpecs = specs;
+		lock( ActiveDialogsGate )
+			ActiveDialogs.Add( this );
 		ButtonSpec? defaultSpec = Array.Find( specs, s => s.IsDefault ) ?? specs[ ^1 ];
 		foreach( ButtonSpec spec in specs )
 		{
@@ -97,7 +149,12 @@ public sealed partial class MessageBox : Page
 			button.SetGrid( ButtonRow, spec.Column );
 		}
 
-		window.Closed += ( _, _ ) => result.TrySetResult( DialogResult.Cancel );
+		window.Closed += ( _, _ ) =>
+		{
+			lock( ActiveDialogsGate )
+				ActiveDialogs.Remove( this );
+			result.TrySetResult( DialogResult.Cancel );
+		};
 		KeyDown += ( _, e ) =>
 		{
 			if( e.Key == Windows.System.VirtualKey.Escape )
@@ -115,6 +172,8 @@ public sealed partial class MessageBox : Page
 
 	private void Close( DialogResult result )
 	{
+		lock( ActiveDialogsGate )
+			ActiveDialogs.Remove( this );
 		_result.TrySetResult( result );
 		_window?.Close();
 	}

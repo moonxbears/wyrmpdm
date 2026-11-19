@@ -59,6 +59,16 @@ public sealed partial class HomeView : Page
 	internal SearchOdooView? SearchPage => DockedSearchHost.Content as SearchOdooView;
 	internal bool IsStatusDrawerOpen => DockedStatusDrawer.Visibility == Microsoft.UI.Xaml.Visibility.Visible;
 	internal bool IsSearchDrawerOpen => DockedSearchDrawer.Visibility == Microsoft.UI.Xaml.Visibility.Visible;
+	internal NavigatePageMenu CurrentMenu => _currentMenu;
+	internal void GoBackInternal() => GoBack();
+	internal void SwapSearchDockSide()
+	{
+		UIStorage.WorkspaceLayout.SearchDock = UIStorage.WorkspaceLayout.SearchDock == FolderDockSide.Right
+			? FolderDockSide.Left
+			: FolderDockSide.Right;
+		ArrangeSearchDrawer();
+		ShellSplitter_DragCompleted();
+	}
 
 	/// <summary>Selects the page's menu item, which shows the page.</summary>
 	internal void Select( NavigatePageMenu page )
@@ -85,6 +95,14 @@ public sealed partial class HomeView : Page
 			AppComposition.Dialogs.ToggleStatusWindow();
 		else if( args.InvokedItemContainer == SearchNav )
 			AppComposition.Dialogs.ToggleSearchWindow();
+		else if( args.InvokedItemContainer == CommandPaletteNav )
+			HackPDM.Shell.Mcp.CommandPaletteManager.Toggle();
+		else if( args.InvokedItemContainer == McpNav )
+		{
+			Select( NavigatePageMenu.Settings );
+			if( NavFrame.Content is ApplicationSettingsView settingsView )
+				settingsView.SelectSection( "Mcp" );
+		}
 	}
 
 	private void HomeNavigator_SelectionChanged( NavigationView sender, NavigationViewSelectionChangedEventArgs args )
@@ -205,7 +223,21 @@ public sealed partial class HomeView : Page
 	private void HomeView_KeyDown( object sender, KeyRoutedEventArgs e )
 	{
 		bool ctrl = InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Control ).HasFlag( CoreVirtualKeyStates.Down );
+		bool shift = InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Shift ).HasFlag( CoreVirtualKeyStates.Down );
 		bool alt = InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Menu ).HasFlag( CoreVirtualKeyStates.Down );
+
+		if( e.Key == VirtualKey.Escape && HackPDM.Shell.Mcp.CommandPaletteManager.IsOpen )
+		{
+			e.Handled = true;
+			HackPDM.Shell.Mcp.CommandPaletteManager.Close();
+			return;
+		}
+		if( ctrl && ( e.Key == VirtualKey.K || ( shift && e.Key == VirtualKey.P ) ) )
+		{
+			e.Handled = true;
+			HackPDM.Shell.Mcp.CommandPaletteManager.Toggle();
+			return;
+		}
 
 		if( alt && e.Key == VirtualKey.Left )
 		{
@@ -525,6 +557,9 @@ public sealed partial class HomeView : Page
 		Canvas.SetLeft( element, left );
 		Canvas.SetTop( element, top );
 	}
+
+	internal Microsoft.UI.Xaml.Controls.Canvas GuidedOverlayCanvas => McpGuidedOverlayCanvas;
+	internal Microsoft.UI.Xaml.Controls.Grid CommandPaletteHost => CommandPaletteOverlayHost;
 
 	internal void HideOverlay( Microsoft.UI.Xaml.FrameworkElement? element )
 	{

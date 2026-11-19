@@ -89,6 +89,8 @@ public class GraphThemeTests
 		Assert.Equal( NodeKind.Pdf, GraphThemes.KindOf( Node( "pdf" ) ) );
 		Assert.Equal( NodeKind.Other, GraphThemes.KindOf( Node( "txt" ) ) );
 		Assert.Equal( NodeKind.Deleted, GraphThemes.KindOf( Node( "sldprt", deleted: true ) ) );
+		Assert.Equal( NodeKind.Folder, GraphThemes.KindOf( Node( "" ) with { Role = GraphNodeRole.Folder } ) );
+		Assert.Equal( NodeKind.Property, GraphThemes.KindOf( Node( "" ) with { Role = GraphNodeRole.PropertyGroup } ) );
 	}
 
 	[Fact]

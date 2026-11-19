@@ -48,10 +48,40 @@ public sealed class ThemeSettings
 	/// <summary>Theme resource key → color as "#AARRGGBB", used while the dark theme is active.</summary>
 	public Dictionary<string, string> Dark { get; set; } = [];
 
+	/// <summary>Independent shape, corner, border, density, font, and spacing overrides on top of <see cref="Form"/>.</summary>
+	public ThemeStyleOverrides Style { get; set; } = new();
+
+	/// <summary>Independent dependency graph color, shape, and layout overrides on top of <see cref="Palette"/> / <see cref="Form"/>.</summary>
+	public GraphThemeOverrides Graph { get; set; } = new();
+
+	/// <summary>User- or AI-saved reusable custom theme presets persisted in AppConfig.json.</summary>
+	public Dictionary<string, SavedThemePreset> CustomThemes { get; set; } = new( StringComparer.OrdinalIgnoreCase );
+
+	/// <summary>Optional name of the custom theme currently loaded from <see cref="CustomThemes"/>.</summary>
+	public string? ActiveCustomTheme { get; set; }
+
 	/// <summary>Picks the color overrides for one base theme.</summary>
 	/// <param name="dark">Whether the dark theme is active.</param>
 	/// <returns>The live <see cref="Dark"/> or <see cref="Light"/> dictionary (not a copy), so changes to it are saved with the settings.</returns>
 	public Dictionary<string, string> OverridesFor( bool dark ) => dark ? Dark : Light;
+
+	/// <summary>Restores every theme setting back to HackPDM factory defaults (Dark / Default / branch lines on / no overrides).</summary>
+	public void ResetToFactoryDefaults( bool clearCustomThemes = false )
+	{
+		Mode = AppThemeMode.Dark;
+		Palette = PaletteName.Dark;
+		Form = FormName.Default;
+		ShowTreeBranchLines = true;
+		Light.Clear();
+		Dark.Clear();
+		Style ??= new();
+		Style.Clear();
+		Graph ??= new();
+		Graph.Clear();
+		ActiveCustomTheme = null;
+		if( clearCustomThemes )
+			CustomThemes?.Clear();
+	}
 }
 
 /// <summary>An ARGB color without any UI dependency, with "#AARRGGBB" / "#RRGGBB" parsing.</summary>

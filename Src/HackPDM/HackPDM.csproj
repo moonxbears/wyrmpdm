@@ -37,6 +37,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
+    <ProjectReference Include="..\HackPDM.Mcp.Core\HackPDM.Mcp.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="$(TargetFramework.Contains('windows'))">

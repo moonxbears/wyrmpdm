@@ -9,11 +9,42 @@ public enum GraphDirection
 	Parents,
 	/// <summary>Both; the selected files are in the middle.</summary>
 	Both,
+	/// <summary>
+	/// Full bidirectional neighborhood: shows parents, children, and recursively each parent's and
+	/// child's parents and children (siblings, co-parents, and multi-hop ancestors/descendants).
+	/// </summary>
+	FullNetwork,
 }
 
-/// <summary>One file in a dependency graph.</summary>
-/// <param name="Id">The hp.entry id.</param>
-/// <param name="Name">The file name, with its extension.</param>
+/// <summary>How the node graph organizes and constructs its nodes and links.</summary>
+public enum GraphViewMode
+{
+	/// <summary>File-to-file dependency network around selected entries.</summary>
+	Dependencies,
+	/// <summary>Vault directory hierarchy shown as folder nodes and parent-to-child folder links.</summary>
+	FolderStructure,
+	/// <summary>Folder hierarchy together with the files inside each folder (and optional dependency links).</summary>
+	FoldersAndFiles,
+	/// <summary>Files grouped under hub nodes for any custom property or built-in attribute (Category, Extension, Material, etc.).</summary>
+	ByProperty,
+	/// <summary>Files matching multi-criteria vault search/filter rules, with optional dependency expansion.</summary>
+	SearchFilter,
+}
+
+/// <summary>Semantic role of a node rendered in a <see cref="DependencyGraph"/>.</summary>
+public enum GraphNodeRole
+{
+	/// <summary>A vault file (<c>hp.entry</c>).</summary>
+	File,
+	/// <summary>A vault folder (<c>hp.directory</c> or local folder).</summary>
+	Folder,
+	/// <summary>A synthetic grouping hub representing a property or attribute value.</summary>
+	PropertyGroup,
+}
+
+/// <summary>One node (file, folder, or property group) in a graph.</summary>
+/// <param name="Id">The hp.entry id (positive for files; negative synthetic ids for folders and property groups).</param>
+/// <param name="Name">The display name (file name with extension, folder name, or group title).</param>
 /// <param name="Ext">The extension, lower case, without the dot.</param>
 /// <param name="Size">The latest version's size in bytes.</param>
 /// <param name="Category">The file type's category name; empty when none.</param>
@@ -31,6 +62,18 @@ public sealed record GraphNode( int Id, string Name, string Ext, long Size, stri
 	public string Modified { get; init; } = "";
 	/// <summary>How many versions the file has.</summary>
 	public int Versions { get; init; }
+	/// <summary>Whether this node represents a file, folder, or property group hub.</summary>
+	public GraphNodeRole Role { get; init; } = GraphNodeRole.File;
+	/// <summary>Optional secondary summary line for non-file nodes (e.g. subfolder/file count or property name).</summary>
+	public string Subtitle { get; init; } = "";
+	/// <summary>Number of direct items represented by a folder or property group node.</summary>
+	public int ItemCount { get; init; }
+	/// <summary>Number of direct offspring/child branches omitted from this node due to branch or depth limits.</summary>
+	public int OmittedChildBranches { get; init; }
+	/// <summary>Number of direct parent branches omitted from this node due to branch or depth limits.</summary>
+	public int OmittedParentBranches { get; init; }
+	/// <summary>Optional custom properties keyed by property name (case-insensitive).</summary>
+	public IReadOnlyDictionary<string, string>? Properties { get; init; }
 }
 
 /// <summary>A dependency: <paramref name="Parent"/>'s latest version uses <paramref name="Child"/>.</summary>

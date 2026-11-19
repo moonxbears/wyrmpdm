@@ -46,6 +46,27 @@ namespace HackPDM.Mvvm.ViewModels.Settings
 
 	[Bindable]
 	public partial class ThemeColorItem;
+
+	[Bindable]
+	public partial class McpSettingsViewModel;
+
+	[Bindable]
+	public partial class McpRestorePointRow;
+
+	[Bindable]
+	public partial class McpActivityRow;
+
+	[Bindable]
+	public partial class McpPendingReviewRow;
+
+	[Bindable]
+	public partial class McpProfileOption;
+
+	[Bindable]
+	public partial class McpModeOption;
+
+	[Bindable]
+	public partial class McpCapabilityToggleRow;
 }
 
 namespace HackPDM.Mvvm.ViewModels.Tools

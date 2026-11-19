@@ -103,6 +103,26 @@
                     <FontIcon Glyph="&#xE9D9;" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
+            <NavigationViewItem
+                x:Name="CommandPaletteNav"
+                Content="Command Palette"
+                SelectsOnInvoked="False"
+                Tag="CommandPalette"
+                ToolTipService.ToolTip="Open Command Palette &amp; AI Assistant (Ctrl+K)">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE756;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem
+                x:Name="McpNav"
+                Content="MCP Server"
+                SelectsOnInvoked="False"
+                Tag="McpServer"
+                ToolTipService.ToolTip="Open MCP Server, Activity Log &amp; Restore Points">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Remote" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
         </NavigationView.FooterMenuItems>
 
         <Grid x:Name="ShellExtensionsGrid">
@@ -337,5 +357,11 @@
 
         <!--  In-Window Overlay Canvas (hover popups from bottom minimal status bar, etc.)  -->
         <Canvas x:Name="ShellOverlayCanvas" />
+
+        <!--  Dedicated MCP Guided Actions & Attention Cues Overlay Layer (spotlights, pulse halos, callout popups, guided tours)  -->
+        <Canvas x:Name="McpGuidedOverlayCanvas" />
+
+        <!--  Spotlight Command Palette & Built-In MCP AI Assistant Modal Overlay (Ctrl+K / Ctrl+Shift+P)  -->
+        <Grid x:Name="CommandPaletteOverlayHost" Visibility="Collapsed" />
     </Grid>
 </Page>

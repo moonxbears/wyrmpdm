@@ -131,4 +131,61 @@ public class GraphLayoutTests
 		Assert.Single( r.Nodes );
 		Assert.True( r.Nodes[ 0 ].IsRoot );
 	}
+
+	[Fact]
+	public void FullNetwork_LaysOutParentsChildrenSiblingsAndCoParents_LeftToRight()
+	{
+		// GrandTop(10) -> Top(1) -> Sub(2, Root) -> Bolt(3) -> Washer(4)
+		// Top(1) -> Sibling(5)   (parent's other child)
+		// CoGrand(11) -> CoParent(6) -> Bolt(3)   (child's other parent and its parent)
+		const int GrandTop = 10, TopN = 1, SubN = 2, BoltN = 3, Washer = 4, Sibling = 5, CoParent = 6, CoGrand = 11;
+		var graph = new DependencyGraph(
+			[ SubN ],
+			[ Node( GrandTop ), Node( TopN ), Node( SubN ), Node( BoltN ), Node( Washer ), Node( Sibling ), Node( CoParent ), Node( CoGrand ) ],
+			[
+				new( GrandTop, TopN ),
+				new( TopN, SubN ),
+				new( TopN, Sibling ),
+				new( SubN, BoltN ),
+				new( BoltN, Washer ),
+				new( CoParent, BoltN ),
+				new( CoGrand, CoParent ),
+			],
+			false );
+
+		var r = GraphLayout.Arrange( graph, GraphDirection.FullNetwork );
+
+		Assert.Equal( 8, r.Nodes.Count );
+		Assert.Equal( 0, LayerOf( r, SubN ) );
+		Assert.Equal( -1, LayerOf( r, TopN ) );
+		Assert.Equal( -2, LayerOf( r, GrandTop ) );
+		Assert.Equal( 0, LayerOf( r, Sibling ) );
+		Assert.Equal( 1, LayerOf( r, BoltN ) );
+		Assert.Equal( 2, LayerOf( r, Washer ) );
+		Assert.Equal( 0, LayerOf( r, CoParent ) );
+		Assert.Equal( -1, LayerOf( r, CoGrand ) );
+
+		// Every acyclic edge strictly flows left-to-right from parent output to child input
+		foreach( EdgeRoute e in r.Edges )
+		{
+			Assert.True( LayerOf( r, e.Edge.Parent ) < LayerOf( r, e.Edge.Child ), $"Edge {e.Edge.Parent}->{e.Edge.Child} should go left-to-right" );
+			Assert.True( e.FromX < e.ToX );
+		}
+
+		// No overlapping boxes anywhere in the network
+		foreach( var a in r.Nodes )
+			foreach( var b in r.Nodes.Where( b => b != a ) )
+				Assert.False( a.X < b.X + b.Width && b.X < a.X + a.Width && a.Y < b.Y + b.Height && b.Y < a.Y + a.Height,
+					$"{a.Node.Id} overlaps {b.Node.Id}" );
+	}
+
+	[Fact]
+	public void FullNetwork_Cycles_DoNotHang()
+	{
+		var graph = new DependencyGraph( [ 1 ], [ Node( 1 ), Node( 2 ), Node( 3 ) ],
+			[ new( 1, 2 ), new( 2, 3 ), new( 3, 1 ) ], false );
+		var r = GraphLayout.Arrange( graph, GraphDirection.FullNetwork );
+		Assert.Equal( 3, r.Nodes.Count );
+		Assert.Equal( 3, r.Edges.Count );
+	}
 }

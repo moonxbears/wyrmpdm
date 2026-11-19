@@ -21,7 +21,11 @@ public sealed partial class ThemeEditorView : Page
 	{
 		InitializeComponent();
 		ViewModel.SelectedColorValueChanged += ShowInPicker;
-		Unloaded += ( _, _ ) => ViewModel.SelectedColorValueChanged -= ShowInPicker;
+		Unloaded += ( _, _ ) =>
+		{
+			ViewModel.SelectedColorValueChanged -= ShowInPicker;
+			ViewModel.Dispose();
+		};
 		ShowInPicker( ArgbColor.TryParse( ViewModel.SelectedColor?.Hex, out var c ) ? c : null );
 		FillSamples();
 	}

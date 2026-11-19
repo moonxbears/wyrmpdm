@@ -108,6 +108,13 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 			return _values.ContainsKey( key );
 	}
 
+	/// <summary>Returns a thread-safe snapshot of all stored key/value pairs.</summary>
+	public IReadOnlyDictionary<string, JsonElement> Snapshot()
+	{
+		lock( _gate )
+			return _values.ToDictionary( kv => kv.Key, kv => kv.Value.Clone(), StringComparer.Ordinal );
+	}
+
 	/// <summary>Deletes a setting and saves the file if it existed.</summary>
 	/// <param name="key">The setting name (case-sensitive).</param>
 	public void Remove( string key )

@@ -10,6 +10,8 @@ namespace HackPDM.Mvvm.Views.Settings;
 /// <summary>Application settings hub (the NavigationView's settings gear): one section per settings page.</summary>
 public sealed partial class ApplicationSettingsView : Page
 {
+	internal Page? ActiveSectionPage => SectionFrame.Content as Page;
+
 	public ApplicationSettingsView()
 	{
 		InitializeComponent();
@@ -19,12 +21,13 @@ public sealed partial class ApplicationSettingsView : Page
 	private void SettingsSections_SelectionChanged( SelectorBar sender, SelectorBarSelectionChangedEventArgs args )
 		=> ShowSection( sender.SelectedItem );
 
-	/// <summary>Switches the active tab (for example <c>"Status"</c> or <c>"Theme"</c>).</summary>
+	/// <summary>Switches the active tab (for example <c>"Status"</c>, <c>"Theme"</c>, or <c>"Mcp"</c>).</summary>
 	public void SelectSection( string sectionName )
 	{
-		SelectorBarItem target = sectionName switch
+		SelectorBarItem target = sectionName.Trim().ToLowerInvariant() switch
 		{
-			"Status" => StatusSection,
+			"status" => StatusSection,
+			"mcp" or "mcpserver" or "mcp server" => McpSection,
 			_ => ThemeSection,
 		};
 		SettingsSections.SelectedItem = target;
@@ -37,6 +40,7 @@ public sealed partial class ApplicationSettingsView : Page
 		{
 			nameof( ThemeSection ) => typeof( ThemeEditorView ),
 			nameof( StatusSection ) => typeof( StatusSettingsView ),
+			nameof( McpSection ) => typeof( McpSettingsView ),
 			_ => null,
 		};
 		if( page is null || SectionFrame.CurrentSourcePageType == page )
@@ -46,9 +50,9 @@ public sealed partial class ApplicationSettingsView : Page
 			bool firstLoad = SectionFrame.CurrentSourcePageType is null;
 			NavigationSlideAxis slide = firstLoad
 				? NavigationSlideAxis.None
-				: page == typeof( StatusSettingsView )
-					? NavigationSlideAxis.Left
-					: NavigationSlideAxis.Right;
+				: page == typeof( ThemeEditorView )
+					? NavigationSlideAxis.Right
+					: NavigationSlideAxis.Left;
 
 			SectionFrame.Navigate( page, null, new SuppressNavigationTransitionInfo() );
 			NavigationTransitions.Play( SectionFrame.Content, slide );

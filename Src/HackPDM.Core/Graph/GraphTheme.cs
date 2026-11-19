@@ -24,7 +24,7 @@ public enum LinkStyle
 	GlowCurve,
 }
 
-/// <summary>A file's kind, for its color.</summary>
+/// <summary>A node's kind, for its header color.</summary>
 public enum NodeKind
 {
 	Assembly,
@@ -33,6 +33,8 @@ public enum NodeKind
 	Pdf,
 	Other,
 	Deleted,
+	Folder,
+	Property,
 }
 
 /// <summary>The colors of the graph, as 0xAARRGGBB.</summary>
@@ -112,6 +114,7 @@ public static class GraphThemes
 			{
 				[ NodeKind.Assembly ] = 0xFF2E7D46, [ NodeKind.Part ] = 0xFF285FAA, [ NodeKind.Drawing ] = 0xFF783C96,
 				[ NodeKind.Pdf ] = 0xFFAA4632, [ NodeKind.Other ] = 0xFF555F69, [ NodeKind.Deleted ] = 0xFF8C2828,
+				[ NodeKind.Folder ] = 0xFF945A0A, [ NodeKind.Property ] = 0xFF0E6B78,
 			} ),
 		new( PaletteName.Light, "Light",
 			Backdrop: 0xFFF3F4F6, GridLine: 0xFFE3E5E9, Body: 0xFFFFFFFF, BodyBorder: 0xFFC9CED6,
@@ -122,6 +125,7 @@ public static class GraphThemes
 			{
 				[ NodeKind.Assembly ] = 0xFF2D7A47, [ NodeKind.Part ] = 0xFF2563B8, [ NodeKind.Drawing ] = 0xFF7B4BA6,
 				[ NodeKind.Pdf ] = 0xFFB4462F, [ NodeKind.Other ] = 0xFF5B6470, [ NodeKind.Deleted ] = 0xFFA3302F,
+				[ NodeKind.Folder ] = 0xFF945808, [ NodeKind.Property ] = 0xFF0C6A78,
 			} ),
 		new( PaletteName.NavyBlue, "Navy blue",
 			Backdrop: 0xFF0B1A30, GridLine: 0xFF14274A, Body: 0xFF13294B, BodyBorder: 0xFF07111F,
@@ -132,6 +136,7 @@ public static class GraphThemes
 			{
 				[ NodeKind.Assembly ] = 0xFF1C7A63, [ NodeKind.Part ] = 0xFF2F62C8, [ NodeKind.Drawing ] = 0xFF7D52BE,
 				[ NodeKind.Pdf ] = 0xFFB04E39, [ NodeKind.Other ] = 0xFF4B6584, [ NodeKind.Deleted ] = 0xFF9E2A2A,
+				[ NodeKind.Folder ] = 0xFF9C5E08, [ NodeKind.Property ] = 0xFF0E6F7E,
 			} ),
 	];
 
@@ -172,17 +177,22 @@ public static class GraphThemes
 	/// <summary>The graph's colors and shapes for the app's palette and form.</summary>
 	public static GraphTheme From( PaletteName palette, FormName form ) => new( Palette( palette ), Form( form ) );
 
-	/// <summary>The kind of a file, from its extension and whether it is deleted.</summary>
-	public static NodeKind KindOf( GraphNode node ) => node.Deleted
-		? NodeKind.Deleted
-		: node.Ext switch
-		{
-			"sldasm" or "asm" or "iam" => NodeKind.Assembly,
-			"sldprt" or "prt" or "ipt" => NodeKind.Part,
-			"slddrw" or "drw" or "idw" or "dwg" or "dxf" => NodeKind.Drawing,
-			"pdf" => NodeKind.Pdf,
-			_ => NodeKind.Other,
-		};
+	/// <summary>The kind of a node, from its role, deletion state, and file extension.</summary>
+	public static NodeKind KindOf( GraphNode node ) => node.Role switch
+	{
+		GraphNodeRole.Folder => NodeKind.Folder,
+		GraphNodeRole.PropertyGroup => NodeKind.Property,
+		_ => node.Deleted
+			? NodeKind.Deleted
+			: node.Ext.ToLowerInvariant() switch
+			{
+				"sldasm" or "asm" or "iam" => NodeKind.Assembly,
+				"sldprt" or "prt" or "ipt" => NodeKind.Part,
+				"slddrw" or "drw" or "idw" or "dwg" or "dxf" => NodeKind.Drawing,
+				"pdf" => NodeKind.Pdf,
+				_ => NodeKind.Other,
+			},
+	};
 
 	/// <summary>The WCAG contrast ratio of two colors (1 to 21).</summary>
 	public static double Contrast( uint front, uint back ) => ThemePresets.Contrast( front, back );

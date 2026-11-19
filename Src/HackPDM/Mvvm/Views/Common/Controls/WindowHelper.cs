@@ -57,6 +57,7 @@ public static partial class WindowHelper
     public static T CreateWindow<T>(string? configName = null, bool activated = true, bool withFrame = true) where T : Window, new()
     {
         T window = new();
+        RegisterWindow(window);
         if (activated) window.Activate();
 
         if (withFrame)
@@ -71,6 +72,52 @@ public static partial class WindowHelper
         }
         return window;
     }
+
+    // Active windows tracked for live inspection / MCP bridge (removed automatically when Closed fires)
+    private static readonly List<(string Id, WeakReference<Window> Ref)> OpenWindows = [];
+    private static int _nextWindowSeq;
+
+    /// <summary>Registers an open window for inspection; automatically unregisters when it closes.</summary>
+    internal static string RegisterWindow(Window window, string? explicitId = null)
+    {
+        lock (OpenWindows)
+        {
+            PruneDeadWindowsLocked();
+            foreach (var existing in OpenWindows)
+            {
+                if (existing.Ref.TryGetTarget(out Window? target) && ReferenceEquals(target, window))
+                    return existing.Id;
+            }
+            string id = explicitId ?? $"win-{Interlocked.Increment(ref _nextWindowSeq)}";
+            OpenWindows.Add((id, new WeakReference<Window>(window)));
+            window.Closed += (_, _) => UnregisterWindow(window);
+            return id;
+        }
+    }
+
+    internal static void UnregisterWindow(Window window)
+    {
+        lock (OpenWindows)
+            OpenWindows.RemoveAll(entry => !entry.Ref.TryGetTarget(out Window? target) || ReferenceEquals(target, window));
+    }
+
+    internal static IReadOnlyList<(string Id, Window Window)> GetOpenWindows()
+    {
+        lock (OpenWindows)
+        {
+            PruneDeadWindowsLocked();
+            List<(string, Window)> list = [];
+            foreach (var entry in OpenWindows)
+            {
+                if (entry.Ref.TryGetTarget(out Window? target))
+                    list.Add((entry.Id, target));
+            }
+            return list;
+        }
+    }
+
+    private static void PruneDeadWindowsLocked()
+        => OpenWindows.RemoveAll(entry => !entry.Ref.TryGetTarget(out _));
 
     // which window each page created here is shown in (weak: does not keep the page alive)
     private static readonly ConditionalWeakTable<Page, Window> PageWindows = new();
@@ -107,6 +154,7 @@ public static partial class WindowHelper
     public static Window CreateWindowForExistingPage<T>(T page, bool activated = true) where T : Page
     {
         Window window = new();
+        RegisterWindow(window);
         if (activated) window.Activate();
 
         window.Content = new Frame { Content = page };

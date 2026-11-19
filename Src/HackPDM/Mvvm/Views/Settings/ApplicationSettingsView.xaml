@@ -15,6 +15,7 @@
         <SelectorBar x:Name="SettingsSections" Margin="12,4,12,0" SelectionChanged="SettingsSections_SelectionChanged">
             <SelectorBarItem x:Name="ThemeSection" Icon="FontColor" IsSelected="True" Text="Theme" />
             <SelectorBarItem x:Name="StatusSection" Icon="List" Text="Status" />
+            <SelectorBarItem x:Name="McpSection" Icon="Remote" Text="MCP Server" />
         </SelectorBar>
         <Frame x:Name="SectionFrame" Grid.Row="1" />
     </Grid>

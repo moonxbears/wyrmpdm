@@ -282,10 +282,18 @@ public sealed partial class NodeGraphView : Grid
 		GraphForm form = _theme.Form;
 		GraphPalette p = _theme.Palette;
 		uint header = p.Header( GraphThemes.KindOf( node ) );
-		string folder = System.IO.Path.GetDirectoryName( node.Path.Replace( '\\', '/' ) )?.Replace( '/', '\\' ) ?? "";
-		string size = ByteSize.Format( node.Size, " " );
-		string flags = ( node.CheckedOut ? "  ·  checked out" : "" ) + ( node.Deleted ? "  ·  deleted" : "" );
-		double scale = 1 + GraphLayout.SizeFactor( node.Size ) * 0.35;
+		bool isFile = node.Role == GraphNodeRole.File;
+		long effectiveSize = isFile ? node.Size : Math.Max( node.Size, 650_000L );
+		string folder = isFile
+			? ( System.IO.Path.GetDirectoryName( node.Path.Replace( '\\', '/' ) )?.Replace( '/', '\\' ) ?? "" )
+			: ( node.Role == GraphNodeRole.Folder ? node.Path : node.Category );
+		string size = isFile
+			? ByteSize.Format( node.Size, " " )
+			: ( node.Subtitle.Length > 0 ? node.Subtitle : $"{node.ItemCount} items" );
+		string omittedBadge = ( node.OmittedParentBranches > 0 ? $"  ·  +{node.OmittedParentBranches}↑" : "" )
+			+ ( node.OmittedChildBranches > 0 ? $"  ·  +{node.OmittedChildBranches}↓" : "" );
+		string flags = ( isFile ? ( ( node.CheckedOut ? "  ·  checked out" : "" ) + ( node.Deleted ? "  ·  deleted" : "" ) ) : "" ) + omittedBadge;
+		double scale = 1 + GraphLayout.SizeFactor( effectiveSize ) * 0.35;
 		double title = form.TitleSize * scale;
 		double inner = box.Height - 2 * form.BorderThickness;
 
@@ -338,7 +346,17 @@ public sealed partial class NodeGraphView : Grid
 			Opacity = node.Deleted ? 0.7 : 1,
 			Child = content,
 		};
-		ToolTipService.SetToolTip( border, $"{node.Path}\n{size}{( node.Category.Length > 0 ? "  ·  " + node.Category : "" )}" );
+		string tooltip = $"{node.Path}\n{size}{( node.Category.Length > 0 ? "  ·  " + node.Category : "" )}";
+		if( node.OmittedParentBranches > 0 )
+			tooltip += $"\n+{node.OmittedParentBranches} parent branch{( node.OmittedParentBranches == 1 ? "" : "es" )} hidden by limit";
+		if( node.OmittedChildBranches > 0 )
+			tooltip += $"\n+{node.OmittedChildBranches} offspring branch{( node.OmittedChildBranches == 1 ? "" : "es" )} hidden by limit";
+		if( node.Properties is { Count: > 0 } props )
+		{
+			string propSummary = string.Join( "\n", props.Take( 4 ).Select( kv => $"{kv.Key}: {kv.Value}" ) );
+			tooltip += $"\n{propSummary}";
+		}
+		ToolTipService.SetToolTip( border, tooltip );
 		Canvas.SetLeft( border, box.X );
 		Canvas.SetTop( border, box.Y );
 		border.Tapped += ( _, e ) =>
@@ -354,7 +372,7 @@ public sealed partial class NodeGraphView : Grid
 		return border;
 	}
 
-	/// <summary>The header band: the name; compact boxes add the size, fancy ones a gradient and an extension badge.</summary>
+	/// <summary>The header band: the name; compact boxes add the size, fancy ones a gradient and an extension/role badge.</summary>
 	private Border Band( GraphNode node, uint color, double titleSize, GraphForm form, string size )
 	{
 		double r = Math.Max( 0, form.CornerRadius - form.BorderThickness );
@@ -363,17 +381,24 @@ public sealed partial class NodeGraphView : Grid
 		row.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
 		row.Children.Add( Text( node.Name, titleSize, FontWeights.SemiBold, _theme.Palette.HeaderText ) );
 
+		string badgeText = node.Role switch
+		{
+			GraphNodeRole.Folder => "DIR",
+			GraphNodeRole.PropertyGroup => "PROP",
+			_ => node.Ext.ToUpperInvariant(),
+		};
+
 		FrameworkElement? side = null;
 		if( !form.ShowSizeLine )
 			side = Text( size, titleSize * 0.85, FontWeights.Normal, WithAlpha( _theme.Palette.HeaderText, 0xD0 ) );
-		else if( form.Header == HeaderStyle.Gradient && node.Ext.Length > 0 )
+		else if( form.Header == HeaderStyle.Gradient && badgeText.Length > 0 )
 			side = new Border
 			{
 				Background = Brush( 0x40FFFFFF ),
 				CornerRadius = new CornerRadius( 8 ),
 				Padding = new Thickness( 7, 1, 7, 2 ),
 				VerticalAlignment = VerticalAlignment.Center,
-				Child = Text( node.Ext.ToUpperInvariant(), 9.5, FontWeights.Bold, _theme.Palette.HeaderText ),
+				Child = Text( badgeText, 9.5, FontWeights.Bold, _theme.Palette.HeaderText ),
 			};
 		if( side is not null )
 		{

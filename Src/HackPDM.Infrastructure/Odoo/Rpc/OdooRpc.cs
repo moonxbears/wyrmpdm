@@ -57,7 +57,9 @@ public static class OdooRpc
 	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled. This is the only exception rethrown.</exception>
 	private static readonly HashSet<string> IdempotentObjectMethods = new( StringComparer.Ordinal )
 	{
-		"search", "search_read", "read", "search_count", "smart_read", "related_browse",
+		"search", "search_read", "read", "search_count", "read_group", "fields_get",
+		"name_search", "name_get", "default_get", "check_access_rights",
+		"smart_read", "related_browse", "dependency_graph",
 		"get_entries", "get_all_entry_ids", "get_children_directories_by_id",
 		"get_recursive_dependency_versions", "get_recursive_dependency_entries",
 		"read_contents", "upload_chunk", "has_group",
@@ -67,7 +69,7 @@ public static class OdooRpc
 	{
 		if( service == "common" && method == "version" )
 			return true;
-		if( service == "object" && method == "execute" && args.Count >= 5 && args[ 4 ] is string modelMethod )
+		if( service == "object" && method is "execute" or "execute_kw" && args.Count >= 5 && args[ 4 ] is string modelMethod )
 			return IdempotentObjectMethods.Contains( modelMethod );
 		return false;
 	}
@@ -154,6 +156,23 @@ public static class OdooRpc
 	{
 		Result<JsonElement> raw = await CallAsync( "object", "execute",
 			[ Settings.OdooDb, Settings.OdooId, Settings.OdooPass, model, method, .. args ], timeoutMs, token );
+		return raw.Ok ? Convert<T>( raw.Value ) : Result<T>.Fail( raw.Error );
+	}
+
+	/// <summary>Calls a model method via <c>object.execute_kw</c> with positional <paramref name="args"/> and keyword <paramref name="kwargs"/> (including optional <c>context</c>).</summary>
+	public static async Task<Result<T>> ExecuteKwAsync<T>(
+		string model,
+		string method,
+		IReadOnlyList<object?> args,
+		IReadOnlyDictionary<string, object?>? kwargs = null,
+		int? timeoutMs = null,
+		CancellationToken token = default )
+	{
+		object?[] rpcArgs = kwargs is { Count: > 0 }
+			? [ Settings.OdooDb, Settings.OdooId, Settings.OdooPass, model, method, args.ToList(), new Dictionary<string, object?>( kwargs ) ]
+			: [ Settings.OdooDb, Settings.OdooId, Settings.OdooPass, model, method, args.ToList() ];
+
+		Result<JsonElement> raw = await CallAsync( "object", "execute_kw", rpcArgs, timeoutMs, token );
 		return raw.Ok ? Convert<T>( raw.Value ) : Result<T>.Fail( raw.Error );
 	}
 
